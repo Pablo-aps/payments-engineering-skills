@@ -1,10 +1,15 @@
 {
   "name": "payments-engineering-skills",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Failure-mode-driven Agent Skills for payment ledgers, idempotency, webhooks, reconciliation, and lifecycle design.",
   "type": "module",
   "scripts": {
+    "benchmark": "npm run benchmark:codex && npm run benchmark:claude && npm run benchmark:merge && npm run benchmark:score",
+    "benchmark:codex": "node benchmark/run.mjs --agent codex --mode both --output benchmark/results/latest.codex.raw.json",
+    "benchmark:claude": "node benchmark/run.mjs --agent claude --mode both --output benchmark/results/latest.claude.raw.json",
+    "benchmark:merge": "node benchmark/merge.mjs benchmark/results/latest.codex.raw.json benchmark/results/latest.claude.raw.json --output benchmark/results/latest.raw.json",
+    "benchmark:score": "node benchmark/score.mjs benchmark/results/latest.raw.json --json-out benchmark/results/latest.scores.json --markdown-out benchmark/results/latest.md",
     "validate": "node scripts/validate-skills.mjs",
     "test": "node --test"
   },

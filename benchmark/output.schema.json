@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["approve", "changes_required"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          },
+          "mechanism": { "type": "string" },
+          "required_control": { "type": "string" },
+          "recovery": { "type": "string" },
+          "failure_test": { "type": "string" }
+        },
+        "required": ["title", "severity", "mechanism", "required_control", "recovery", "failure_test"]
+      }
+    }
+  },
+  "required": ["decision", "summary", "findings"]
+}

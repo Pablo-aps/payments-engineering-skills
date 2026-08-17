@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Deterministic failure fixtures for implementations derived from the skills.",
   "scenarios": [
     {

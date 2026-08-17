@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title description">
+  <title id="title">Payment engineering skill coverage</title>
+  <desc id="description">A payment path from request through idempotency, provider, webhook, ledger, and reconciliation, with the five repository skills mapped to the failure boundaries they review.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#091426"/>
+      <stop offset="1" stop-color="#102946"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#67e8f9"/>
+    </marker>
+    <style>
+      .title { fill: #f8fafc; font: 700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .subtitle { fill: #94a3b8; font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .stage { fill: #e2e8f0; font: 650 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+      .detail { fill: #94a3b8; font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+      .skill { fill: #f8fafc; font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; text-anchor: middle; }
+      .boundary { fill: #a5f3fc; font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="420" fill="url(#background)"/>
+  <text x="54" y="54" class="title">Where the skills protect the payment path</text>
+  <text x="54" y="82" class="subtitle">Coding-agent guardrails at the boundaries where retries, delayed facts, and accounting drift become money loss.</text>
+
+  <g stroke="#67e8f9" stroke-width="3" fill="none" marker-end="url(#arrow)">
+    <path d="M180 164 H214"/>
+    <path d="M390 164 H424"/>
+    <path d="M580 164 H614"/>
+    <path d="M790 164 H824"/>
+    <path d="M980 164 H1014"/>
+  </g>
+
+  <g>
+    <rect x="30" y="120" width="150" height="88" rx="14" fill="#162a46" stroke="#385274"/>
+    <text x="105" y="155" class="stage">Request</text>
+    <text x="105" y="179" class="detail">one business intent</text>
+
+    <rect x="220" y="120" width="170" height="88" rx="14" fill="#162a46" stroke="#22d3ee"/>
+    <text x="305" y="155" class="stage">Idempotency</text>
+    <text x="305" y="179" class="detail">claim · retry · recover</text>
+
+    <rect x="430" y="120" width="150" height="88" rx="14" fill="#162a46" stroke="#385274"/>
+    <text x="505" y="155" class="stage">Provider</text>
+    <text x="505" y="179" class="detail">external outcome</text>
+
+    <rect x="620" y="120" width="170" height="88" rx="14" fill="#162a46" stroke="#22d3ee"/>
+    <text x="705" y="155" class="stage">Webhook</text>
+    <text x="705" y="179" class="detail">delayed · duplicate · stale</text>
+
+    <rect x="830" y="120" width="150" height="88" rx="14" fill="#162a46" stroke="#22d3ee"/>
+    <text x="905" y="155" class="stage">Ledger</text>
+    <text x="905" y="179" class="detail">journal · balances</text>
+
+    <rect x="1020" y="120" width="230" height="88" rx="14" fill="#162a46" stroke="#22d3ee"/>
+    <text x="1135" y="155" class="stage">Reconciliation</text>
+    <text x="1135" y="179" class="detail">prove both sides agree</text>
+  </g>
+
+  <g>
+    <path d="M305 208 V240" stroke="#22d3ee" stroke-width="2" stroke-dasharray="4 4"/>
+    <rect x="185" y="240" width="240" height="44" rx="12" fill="#0e7490"/>
+    <text x="305" y="267" class="skill">implement-idempotent-payments</text>
+
+    <path d="M705 208 V240" stroke="#22d3ee" stroke-width="2" stroke-dasharray="4 4"/>
+    <rect x="585" y="240" width="240" height="44" rx="12" fill="#0e7490"/>
+    <text x="705" y="267" class="skill">build-reliable-payment-webhooks</text>
+
+    <path d="M905 208 V240" stroke="#22d3ee" stroke-width="2" stroke-dasharray="4 4"/>
+    <rect x="835" y="240" width="180" height="44" rx="12" fill="#0e7490"/>
+    <text x="925" y="267" class="skill">design-payment-ledger</text>
+
+    <path d="M1135 208 V240" stroke="#22d3ee" stroke-width="2" stroke-dasharray="4 4"/>
+    <rect x="1025" y="240" width="225" height="44" rx="12" fill="#0e7490"/>
+    <text x="1137.5" y="267" class="skill">reconcile-payment-systems</text>
+
+    <path d="M430 332 H790" stroke="#8b5cf6" stroke-width="2"/>
+    <circle cx="430" cy="332" r="5" fill="#c4b5fd"/>
+    <circle cx="790" cy="332" r="5" fill="#c4b5fd"/>
+    <rect x="480" y="310" width="260" height="44" rx="12" fill="#6d28d9"/>
+    <text x="610" y="337" class="skill">review-payment-state-machine</text>
+    <text x="640" y="389" class="boundary">tracks evidence across attempts, authorizations, captures, refunds, disputes, and fulfillment</text>
+  </g>
+</svg>

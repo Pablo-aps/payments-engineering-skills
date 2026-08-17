@@ -1,0 +1,337 @@
+{
+  "benchmark_version": 2,
+  "source_results": "benchmark/results/2026-08-18.codex.raw.json",
+  "generated_at": "2026-08-17T21:44:58.795Z",
+  "scores": [
+    {
+      "case_id": "ambiguous-refund-timeout",
+      "agent": "codex",
+      "mode": "baseline",
+      "score": 3,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "indeterminate-outcome",
+          "description": "Treats timeout or server error as an unknown outcome rather than final failure.",
+          "passed": true,
+          "matched_pattern": "unknown outcome"
+        },
+        {
+          "id": "stable-provider-key",
+          "description": "Requires reuse of the same provider idempotency key and rejects a fresh key during recovery.",
+          "passed": true,
+          "matched_pattern": "reuse.{0,40}(same|original).{0,30}(idempotency )?key"
+        },
+        {
+          "id": "authoritative-recovery",
+          "description": "Uses inquiry, webhook evidence, or reconciliation before another mutation.",
+          "passed": true,
+          "matched_pattern": "reconcil"
+        },
+        {
+          "id": "late-success-test",
+          "description": "Requires a lost-response or timeout test with later provider success and one effect.",
+          "passed": false,
+          "matched_pattern": null
+        }
+      ]
+    },
+    {
+      "case_id": "ambiguous-refund-timeout",
+      "agent": "codex",
+      "mode": "skill",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "indeterminate-outcome",
+          "description": "Treats timeout or server error as an unknown outcome rather than final failure.",
+          "passed": true,
+          "matched_pattern": "indeterminate"
+        },
+        {
+          "id": "stable-provider-key",
+          "description": "Requires reuse of the same provider idempotency key and rejects a fresh key during recovery.",
+          "passed": true,
+          "matched_pattern": "same.{0,30}(idempotency )?key"
+        },
+        {
+          "id": "authoritative-recovery",
+          "description": "Uses inquiry, webhook evidence, or reconciliation before another mutation.",
+          "passed": true,
+          "matched_pattern": "reconcil"
+        },
+        {
+          "id": "late-success-test",
+          "description": "Requires a lost-response or timeout test with later provider success and one effect.",
+          "passed": true,
+          "matched_pattern": "exactly one.{0,30}refund"
+        }
+      ]
+    },
+    {
+      "case_id": "duplicate-webhook",
+      "agent": "codex",
+      "mode": "baseline",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "durable-acceptance",
+          "description": "Persists an inbox record before acknowledgement and does not rely on process memory.",
+          "passed": true,
+          "matched_pattern": "in-memory.{0,30}(unsafe|insufficient|lost)"
+        },
+        {
+          "id": "semantic-effect-identity",
+          "description": "Separates delivery identity from idempotency of the financial effect.",
+          "passed": true,
+          "matched_pattern": "semantic.{0,30}(idempot|key|duplicate)"
+        },
+        {
+          "id": "guarded-ordering",
+          "description": "Rejects arrival order as lifecycle truth and requires guarded transitions or current evidence.",
+          "passed": true,
+          "matched_pattern": "out.of.order"
+        },
+        {
+          "id": "crash-and-duplicate-tests",
+          "description": "Tests crash after effect plus duplicate and reordered delivery.",
+          "passed": true,
+          "matched_pattern": "duplicate.{0,50}(reorder|out.of.order|crash)"
+        }
+      ]
+    },
+    {
+      "case_id": "duplicate-webhook",
+      "agent": "codex",
+      "mode": "skill",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "durable-acceptance",
+          "description": "Persists an inbox record before acknowledgement and does not rely on process memory.",
+          "passed": true,
+          "matched_pattern": "durable inbox"
+        },
+        {
+          "id": "semantic-effect-identity",
+          "description": "Separates delivery identity from idempotency of the financial effect.",
+          "passed": true,
+          "matched_pattern": "semantic.{0,30}(idempot|key|duplicate)"
+        },
+        {
+          "id": "guarded-ordering",
+          "description": "Rejects arrival order as lifecycle truth and requires guarded transitions or current evidence.",
+          "passed": true,
+          "matched_pattern": "out.of.order"
+        },
+        {
+          "id": "crash-and-duplicate-tests",
+          "description": "Tests crash after effect plus duplicate and reordered delivery.",
+          "passed": true,
+          "matched_pattern": "distinct.{0,30}event ids"
+        }
+      ]
+    },
+    {
+      "case_id": "concurrent-withdrawal",
+      "agent": "codex",
+      "mode": "baseline",
+      "score": 3,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "race-detected",
+          "description": "Identifies the stale-read, lost-update, or concurrent overspend race.",
+          "passed": true,
+          "matched_pattern": "concurrent.{0,50}(withdraw|debit|read)"
+        },
+        {
+          "id": "database-concurrency-control",
+          "description": "Requires an explicit database-level atomic guard, lock, or serializable retry.",
+          "passed": true,
+          "matched_pattern": "for update"
+        },
+        {
+          "id": "journal-authority",
+          "description": "Requires an immutable balanced journal instead of mutable balance-only history.",
+          "passed": false,
+          "matched_pattern": null
+        },
+        {
+          "id": "deterministic-race-test",
+          "description": "Tests both withdrawals concurrently with one post, one rejection, and balance 300.",
+          "passed": true,
+          "matched_pattern": "balance.{0,20}300"
+        }
+      ]
+    },
+    {
+      "case_id": "concurrent-withdrawal",
+      "agent": "codex",
+      "mode": "skill",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "race-detected",
+          "description": "Identifies the stale-read, lost-update, or concurrent overspend race.",
+          "passed": true,
+          "matched_pattern": "concurrent.{0,50}(withdraw|debit|read)"
+        },
+        {
+          "id": "database-concurrency-control",
+          "description": "Requires an explicit database-level atomic guard, lock, or serializable retry.",
+          "passed": true,
+          "matched_pattern": "for update"
+        },
+        {
+          "id": "journal-authority",
+          "description": "Requires an immutable balanced journal instead of mutable balance-only history.",
+          "passed": true,
+          "matched_pattern": "double.entry"
+        },
+        {
+          "id": "deterministic-race-test",
+          "description": "Tests both withdrawals concurrently with one post, one rejection, and balance 300.",
+          "passed": true,
+          "matched_pattern": "(700|600).{0,80}(concurrent|simultaneous)"
+        }
+      ]
+    },
+    {
+      "case_id": "aggregate-reconciliation",
+      "agent": "codex",
+      "mode": "baseline",
+      "score": 2,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "aggregate-is-insufficient",
+          "description": "Rejects aggregate equality as proof of reconciliation.",
+          "passed": false,
+          "matched_pattern": null
+        },
+        {
+          "id": "source-completeness",
+          "description": "Requires a source manifest, pagination/file completeness, and schema/control evidence.",
+          "passed": true,
+          "matched_pattern": "completeness"
+        },
+        {
+          "id": "double-sided-item-matching",
+          "description": "Requires item-level matching in both directions with explicit residuals.",
+          "passed": false,
+          "matched_pattern": null
+        },
+        {
+          "id": "offsetting-omission-test",
+          "description": "Tests offsetting missing rows that leave a zero aggregate difference.",
+          "passed": true,
+          "matched_pattern": "offsetting"
+        }
+      ]
+    },
+    {
+      "case_id": "aggregate-reconciliation",
+      "agent": "codex",
+      "mode": "skill",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "aggregate-is-insufficient",
+          "description": "Rejects aggregate equality as proof of reconciliation.",
+          "passed": true,
+          "matched_pattern": "aggregate.{0,60}(insufficient|not|does not|cannot|false|mask|hide)"
+        },
+        {
+          "id": "source-completeness",
+          "description": "Requires a source manifest, pagination/file completeness, and schema/control evidence.",
+          "passed": true,
+          "matched_pattern": "source manifest"
+        },
+        {
+          "id": "double-sided-item-matching",
+          "description": "Requires item-level matching in both directions with explicit residuals.",
+          "passed": true,
+          "matched_pattern": "double.sided"
+        },
+        {
+          "id": "offsetting-omission-test",
+          "description": "Tests offsetting missing rows that leave a zero aggregate difference.",
+          "passed": true,
+          "matched_pattern": "offsetting"
+        }
+      ]
+    },
+    {
+      "case_id": "stale-payment-event",
+      "agent": "codex",
+      "mode": "baseline",
+      "score": 3,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "separate-entities",
+          "description": "Separates commercial intent, provider attempts, captures, and fulfillment.",
+          "passed": false,
+          "matched_pattern": null
+        },
+        {
+          "id": "double-success-detected",
+          "description": "Detects two successful attempts and requires excess-payment compensation.",
+          "passed": true,
+          "matched_pattern": "compensat.{0,50}(duplicate|second|excess)"
+        },
+        {
+          "id": "stale-evidence-guard",
+          "description": "Preserves contradictory facts and prevents stale failure from downgrading captured evidence.",
+          "passed": true,
+          "matched_pattern": "preserve.{0,40}(evidence|fact)"
+        },
+        {
+          "id": "fulfillment-and-late-success-test",
+          "description": "Makes fulfillment idempotent and tests late success plus reversed delivery order.",
+          "passed": true,
+          "matched_pattern": "fulfillment.{0,30}idempot"
+        }
+      ]
+    },
+    {
+      "case_id": "stale-payment-event",
+      "agent": "codex",
+      "mode": "skill",
+      "score": 4,
+      "maximum": 4,
+      "criteria": [
+        {
+          "id": "separate-entities",
+          "description": "Separates commercial intent, provider attempts, captures, and fulfillment.",
+          "passed": true,
+          "matched_pattern": "separate.{0,50}(intent|attempt).{0,50}(capture|fulfillment)"
+        },
+        {
+          "id": "double-success-detected",
+          "description": "Detects two successful attempts and requires excess-payment compensation.",
+          "passed": true,
+          "matched_pattern": "two.{0,30}(success|successful)"
+        },
+        {
+          "id": "stale-evidence-guard",
+          "description": "Preserves contradictory facts and prevents stale failure from downgrading captured evidence.",
+          "passed": true,
+          "matched_pattern": "stale.{0,40}(failure|event).{0,50}(overwrite|downgrade|guard)"
+        },
+        {
+          "id": "fulfillment-and-late-success-test",
+          "description": "Makes fulfillment idempotent and tests late success plus reversed delivery order.",
+          "passed": true,
+          "matched_pattern": "fulfillment.{0,30}idempot"
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Trigger and review-signal cases. Expected values are rubric signals, not exact response text.",
   "cases": [
     {

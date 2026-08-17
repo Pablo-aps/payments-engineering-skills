@@ -4,6 +4,19 @@ All notable changes to this project will be documented here. The project uses [S
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-18
+
+### Added
+
+- Five compact, source-backed payment failure cases covering ambiguous refunds, duplicate webhooks, concurrent withdrawals, aggregate reconciliation, and stale payment events.
+- A hand-authored payment-path diagram and 1280×640 social preview mapping each skill to the boundary it protects.
+- A blind, reproducible Codex and Claude Code before/after benchmark with isolated workspaces, fixed criteria, structured raw outputs, protocol fingerprints, and explicit limitations.
+
+### Changed
+
+- Rebuilt the README first screen around installation, concrete failure mechanisms, and inspectable evidence.
+- Extended repository validation to enforce benchmark answer isolation, one case per skill, fixed rubric structure, example completeness, output schema constraints, and README link integrity.
+
 ## [0.2.0] - 2026-08-17
 
 ### Added
@@ -29,6 +42,7 @@ All notable changes to this project will be documented here. The project uses [S
 - Deterministic cross-skill failure fixtures and dependency-free validation.
 - Contribution, security, conduct, and CI configuration.
 
-[Unreleased]: https://github.com/Pablo-aps/payments-engineering-skills/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Pablo-aps/payments-engineering-skills/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Pablo-aps/payments-engineering-skills/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Pablo-aps/payments-engineering-skills/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Pablo-aps/payments-engineering-skills/releases/tag/v0.1.0

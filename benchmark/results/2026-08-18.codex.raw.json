@@ -1,0 +1,637 @@
+{
+  "benchmark_version": 2,
+  "generated_at": "2026-08-17T21:28:01.193Z",
+  "methodology": {
+    "trials_per_cell": 1,
+    "prompt": "Review case.md as if it were a production payment change. Identify concrete correctness risks, required controls, recovery behavior, and minimum failure tests. Do not edit files. Return concise JSON matching the required output schema.",
+    "workspace": "fresh temporary directory for every run",
+    "baseline": "no project skill",
+    "treatment": "only the case's relevant project skill",
+    "fixture_integrity": "review fixtures contain no expected signals, source notes, or skill instructions",
+    "permissions": "read-only review; no file edits",
+    "scoring": "fixed signal patterns from benchmark/cases.json plus manual review",
+    "protocol_sha256": "c9cc99d7741b90bc63ea8b6b29e22c243395d951debbd8f3fcd07e137dc4ca1d"
+  },
+  "tools": {
+    "codex_cli": "codex-cli 0.147.0",
+    "claude_code": "2.1.234 (Claude Code)"
+  },
+  "runs": [
+    {
+      "case_id": "ambiguous-refund-timeout",
+      "skill": "implement-idempotent-payments",
+      "artifact_sha256": "23c35870e6a42abe6d4e46a33833b7a1b9da400ee14073ed515a3ee26b1a449b",
+      "installed_skill_sha256": null,
+      "agent": "codex",
+      "mode": "baseline",
+      "exit_code": 0,
+      "duration_ms": 36077,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 27130,
+        "cached_input_tokens": 13056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 881,
+        "reasoning_output_tokens": 70
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "The retry can issue duplicate refunds, and the service cannot safely reconcile ambiguous outcomes or recover after crashes. A durable refund operation and stable idempotency key are required before production.",
+        "findings": [
+          {
+            "title": "Retry uses a new idempotency key",
+            "severity": "critical",
+            "mechanism": "A timed-out or post-processing 500 request may succeed at the provider. Retrying with a new UUID is treated as a second refund, potentially refunding twice.",
+            "required_control": "Generate one idempotency key per logical refund operation and reuse it for every retry. Persist it before the first provider call.",
+            "recovery": "Treat timeouts and 5xx responses as unknown outcomes. Query the provider by the persisted key or operation reference and reconcile before retrying or declaring failure.",
+            "failure_test": "Make the first request complete successfully but return a timeout or 500; verify the retry reuses the same key and only one provider refund exists."
+          },
+          {
+            "title": "No durable refund-operation state",
+            "severity": "critical",
+            "mechanism": "A crash after provider acceptance but before the response is recorded loses the outcome. A restarted worker, caller retry, or manual replay can create another refund.",
+            "required_control": "Persist a uniquely constrained logical operation containing payment, amount, currency, provider idempotency key, status, attempts, and provider refund ID. Resume existing operations instead of creating new ones.",
+            "recovery": "On restart, scan pending/unknown operations, reconcile them with the provider, and transition them atomically to succeeded, retryable, or manual-review states.",
+            "failure_test": "Crash after provider acceptance and before local completion, then restart and replay the request; verify reconciliation finds the original refund and no second refund is created."
+          },
+          {
+            "title": "Concurrent calls can exceed the refundable balance",
+            "severity": "high",
+            "mechanism": "Two distinct logical operations for the same payment can race. Provider idempotency only deduplicates identical operations and does not guarantee aggregate refund limits.",
+            "required_control": "Serialize or atomically reserve refunds per payment, enforce a unique client operation ID, and validate the requested minor-unit amount and currency against the remaining refundable balance.",
+            "recovery": "Reconcile all provider refunds for the payment, repair local balances, and route conflicting or over-refunded cases to manual review; never automatically issue compensating charges.",
+            "failure_test": "Submit concurrent full and partial refunds whose total exceeds the remaining balance; verify at most the permitted amount is accepted and duplicates of one client operation return its existing result."
+          },
+          {
+            "title": "Unbounded immediate retry lacks explicit terminal handling",
+            "severity": "medium",
+            "mechanism": "The code retries every timeout or server error immediately once, without classifying provider responses or recording an unknown final outcome. Repeated upstream invocations can create a retry storm.",
+            "required_control": "Use bounded retries with backoff and jitter, retry only documented transient failures, persist attempt state, and move exhausted ambiguous operations to reconciliation/manual review.",
+            "recovery": "A worker should resume pending operations using the same key; exhausted operations must remain visible and alertable rather than being reported as definitively failed.",
+            "failure_test": "Return repeated timeouts/5xx responses and rate limits; verify retry bounds and backoff, stable idempotency, durable unknown status, alerting, and later successful reconciliation."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "ambiguous-refund-timeout",
+      "skill": "implement-idempotent-payments",
+      "artifact_sha256": "23c35870e6a42abe6d4e46a33833b7a1b9da400ee14073ed515a3ee26b1a449b",
+      "installed_skill_sha256": "774f01ca7d88b11f902765aba6568fa034cc9390454600dd26e46115846fad7d",
+      "agent": "codex",
+      "mode": "skill",
+      "exit_code": 0,
+      "duration_ms": 36522,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 47327,
+        "cached_input_tokens": 25088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1314,
+        "reasoning_output_tokens": 92
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Reject for production. Ambiguous timeouts and provider 500s are retried with fresh keys, so one logical refund can create multiple refunds. No durable operation record exists to prevent concurrency, survive crashes, or reconcile uncertain outcomes.",
+        "findings": [
+          {
+            "title": "Fresh retry key can create duplicate refunds",
+            "severity": "critical",
+            "mechanism": "The first request may complete after a timeout or 500; retrying with a new UUID is a distinct provider operation and can refund the payment twice.",
+            "required_control": "Create a durable refund operation before calling the provider. Persist and reuse one downstream idempotency key for every attempt; transition ambiguous responses to INDETERMINATE and never issue a fresh-key retry without authoritative proof of non-execution.",
+            "recovery": "Disable fresh-key automatic retries. Query by persisted provider key/request ID, consume provider events, and reconcile unresolved operations. If duplicates occurred, quarantine affected payments and follow provider-supported financial remediation with an auditable operator workflow.",
+            "failure_test": "Make the provider accept the first refund but return a timeout and separately a post-processing 500; verify all retries use the same key and exactly one provider refund exists."
+          },
+          {
+            "title": "No atomic logical-operation deduplication",
+            "severity": "critical",
+            "mechanism": "Concurrent API calls, worker redelivery, or a crash/restart can each generate independent keys because there is no durable claim or uniqueness constraint.",
+            "required_control": "Require a caller key or stable business-operation identity; atomically insert a record unique on tenant/account, operation type, and key or refund business reference before the provider call. Store payment, asset/currency, amount in minor units, versioned fingerprint, state, and provider correlation.",
+            "recovery": "On uniqueness conflict, load the existing operation: replay authorized terminal results, return in-progress/indeterminate status, and reject fingerprint mismatches. Reconcile abandoned STARTED records rather than starting another refund.",
+            "failure_test": "Race two identical callers and an independently redelivered worker; crash immediately after provider acceptance and after local success but before response. Verify one durable operation, one stable provider key, and one refund."
+          },
+          {
+            "title": "Intent conflicts and amount representation are uncontrolled",
+            "severity": "high",
+            "mechanism": "The function has no idempotency key/fingerprint contract, and JavaScript number values are unsuitable as an authoritative monetary representation. Retries can change amount or omit asset context without detection.",
+            "required_control": "Accept integer minor units or an exact decimal type plus currency/asset. Compute a versioned canonical fingerprint including tenant/provider account, payment ID, refund amount, currency, and operation type; reject reuse with different intent.",
+            "recovery": "Preserve the original operation unchanged and return a deterministic conflict. Require an explicitly authorized new logical refund key for changed intent.",
+            "failure_test": "Reuse one logical key with a different payment, amount, currency, decimal encoding, and default/null representation; every semantic change must conflict while equivalent canonical values deduplicate."
+          },
+          {
+            "title": "Indeterminate outcomes lack durable recovery and retention",
+            "severity": "critical",
+            "mechanism": "Timeouts, post-processing 500s, process crashes, eventual-consistency gaps, provider key expiry, or regional failover can leave the refund applied but locally unknown; the current code has no state, evidence, or tombstone.",
+            "required_control": "Model STARTED, SUCCEEDED, FAILED_FINAL, and INDETERMINATE. Persist request/object IDs and provider account, region, and API generation. Use bounded inquiry with backoff, retain records beyond every retry/redelivery horizon, keep a business-operation tombstone, and route retries within documented provider key scope.",
+            "recovery": "Keep uncertain refunds INDETERMINATE through the provider’s consistency window; reconcile using inquiry, events, and settlement evidence. Escalate aged cases to an owned exception queue and never recreate merely because inquiry initially returns not found or a key expired.",
+            "failure_test": "Cover early inquiry not-found followed by success, cached 500 followed by a success event, redelivery after local/provider expiry, and regional failover with region-local deduplication; verify no second refund is issued."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "duplicate-webhook",
+      "skill": "build-reliable-payment-webhooks",
+      "artifact_sha256": "a0b0d3d51372db652627d6554d98a055488a154c04613cf4029f2eee760f9b16",
+      "installed_skill_sha256": null,
+      "agent": "codex",
+      "mode": "baseline",
+      "exit_code": 0,
+      "duration_ms": 26055,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 27153,
+        "cached_input_tokens": 13056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 917,
+        "reasoning_output_tokens": 108
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "The handler is unsafe under retries, concurrent instances, duplicate transition IDs, partial failures, and out-of-order delivery. It can double-post refunds and regress payment state.",
+        "findings": [
+          {
+            "title": "Refunds can be posted more than once",
+            "severity": "critical",
+            "mechanism": "The in-memory Set is instance-local, lost on restart, and keyed by event ID. Concurrent instances or distinct event IDs for the same refund transition both execute ledger.postRefund.",
+            "required_control": "Enforce durable, database-backed idempotency using a unique semantic operation key, such as provider + objectId + refund/transition ID. Make ledger posting reject duplicate keys atomically.",
+            "recovery": "Reconcile provider refunds against ledger entries, reverse or quarantine duplicates through an auditable compensating workflow, then safely replay missing operations.",
+            "failure_test": "Deliver the same event concurrently to multiple instances, retry it after restart, and deliver two event IDs for one refund transition; assert exactly one ledger entry."
+          },
+          {
+            "title": "Partial failure creates inconsistent state",
+            "severity": "critical",
+            "mechanism": "payments.update and ledger.postRefund are separate side effects. If ledger posting succeeds but the handler fails before processed.add, retry posts again; if payment update succeeds and ledger posting fails, state and ledger diverge.",
+            "required_control": "Use one database transaction where possible, or persist an inbox record and transactional outbox/state-machine operation with durable per-step idempotency. Acknowledge only after durable completion state is recorded.",
+            "recovery": "Store processing status and error details, retry incomplete steps with the same idempotency key, and run reconciliation for stuck or ambiguous records without blindly replaying completed ledger writes.",
+            "failure_test": "Inject failure after each await and immediately before marking completion; retry each case and assert one final payment transition, one refund ledger entry, and a completed durable processing record."
+          },
+          {
+            "title": "Out-of-order events can regress payment status",
+            "severity": "high",
+            "mechanism": "Every event blindly overwrites status, so a delayed older event can replace a newer terminal state with stale state.",
+            "required_control": "Persist provider sequence/version or occurred-at metadata and apply only newer events; additionally enforce an explicit payment-state transition table that rejects invalid regressions.",
+            "recovery": "Rebuild affected payment state from authoritative provider history or a verified latest snapshot, recording corrective changes for audit.",
+            "failure_test": "Deliver lifecycle events in reverse and mixed order, including an old event after refund success; assert the final status equals the newest valid transition and terminal states do not regress."
+          },
+          {
+            "title": "Concurrent check-then-act is not atomic",
+            "severity": "high",
+            "mechanism": "Two invocations can both pass processed.has before either adds the ID, even within one process, and then execute all side effects twice.",
+            "required_control": "Atomically claim events in durable storage using a unique constraint and explicit processing/completed states; never use a check-then-act memory guard for payment effects.",
+            "recovery": "Detect duplicate claims and side effects through reconciliation, retain one canonical operation, and compensate duplicates through controlled ledger corrections.",
+            "failure_test": "Synchronize two handlers so both begin before either finishes; assert only one obtains the claim and only one set of side effects executes."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "duplicate-webhook",
+      "skill": "build-reliable-payment-webhooks",
+      "artifact_sha256": "a0b0d3d51372db652627d6554d98a055488a154c04613cf4029f2eee760f9b16",
+      "installed_skill_sha256": "33c04b4da58e5af773539b01fe95d7c23150650c2e99e80044a5736162a2c2dd",
+      "agent": "codex",
+      "mode": "skill",
+      "exit_code": 0,
+      "duration_ms": 54016,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 46231,
+        "cached_input_tokens": 24064,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1397,
+        "reasoning_output_tokens": 85
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Unsafe for production: the handler has no authenticated durable ingress, relies on per-process memory for deduplication, applies unordered state blindly, and cannot atomically or idempotently protect ledger effects.",
+        "findings": [
+          {
+            "title": "No signature verification or durable acceptance boundary",
+            "severity": "critical",
+            "mechanism": "The handler accepts an already-parsed event with no demonstrated raw-body signature, timestamp, or secret verification and no durable inbox before acknowledgement. A crash can lose an accepted event.",
+            "required_control": "Verify the exact raw bytes before parsing; enforce replay tolerance and bounded secret rotation; persist the signed event, digest, verification metadata, and ready state transactionally before returning 2xx. Return retryable failure when persistence fails.",
+            "recovery": "Replay or backfill provider-retained events through the normal authenticated inbox path; rotate secrets if exposure is suspected.",
+            "failure_test": "Reject invalid/expired signatures and mutated raw bodies; crash immediately before and after inbox commit and verify only durably stored events receive 2xx."
+          },
+          {
+            "title": "In-memory delivery deduplication fails across concurrency and restarts",
+            "severity": "critical",
+            "mechanism": "Each instance owns a separate Set, and the check/update/add sequence is racy. Concurrent retries, another instance, or a restart can process the same event repeatedly.",
+            "required_control": "Use a durable inbox unique constraint namespaced by provider, environment, account/context, endpoint, and event ID. Claim rows using a lock or lease and compare payload digests on identity conflict.",
+            "recovery": "Reclaim abandoned rows, suppress already-recorded effects, quarantine same-identity digest conflicts, and reconcile duplicate mutations.",
+            "failure_test": "Deliver the same valid event concurrently to multiple instances, restart between the side effect and completion, and submit the same identity with a different valid payload; require one effect and quarantine the conflict."
+          },
+          {
+            "title": "Distinct event IDs can duplicate the refund ledger posting",
+            "severity": "critical",
+            "mechanism": "The provider can emit different event IDs for one refund transition, while deduplication uses only event.id. Both events can call ledger.postRefund.",
+            "required_control": "Define a stable semantic refund/effect key—preferably the provider refund or transaction ID plus scoped account—and enforce uniqueness durably in the ledger. Pass that key to an idempotent ledger operation.",
+            "recovery": "Detect duplicate semantic keys, suppress pending duplicates, and reconcile or reverse duplicate ledger entries using an auditable compensating transaction.",
+            "failure_test": "Send two different event IDs representing the same refund, concurrently and sequentially; assert exactly one ledger posting."
+          },
+          {
+            "title": "Out-of-order events can regress payment state",
+            "severity": "critical",
+            "mechanism": "The unconditional status update lets a stale failure, pending, or cancellation overwrite a newer success because the provider provides no delivery ordering guarantee.",
+            "required_control": "Store provider sequence/version when available and apply guarded legal transitions; otherwise fetch authoritative current state. Record stale or conflicting facts without overwriting stronger state.",
+            "recovery": "Restore payment state from authoritative provider evidence, retain the stale event, and open reconciliation for ambiguous conflicts.",
+            "failure_test": "Deliver success before pending/failure, including equal timestamps with differing versions; assert the final state remains the authoritative newer state."
+          },
+          {
+            "title": "Partial failure can repeat financial effects",
+            "severity": "critical",
+            "mechanism": "Payment status and ledger posting are separate operations. If the ledger succeeds but the handler fails before processed.add, retry posts again; if either step fails, state may remain inconsistent.",
+            "required_control": "Model processing durably with RECEIVED, PROCESSING, PROCESSED, RETRYABLE, and QUARANTINED states. Make each effect independently idempotent, record its stable operation key and outcome, and treat unknown outcomes as indeterminate pending reconciliation.",
+            "recovery": "Retry transient failures with capped backoff; query the ledger by operation key after unknown outcomes; resume from recorded effect state rather than rerunning the whole handler.",
+            "failure_test": "Crash after payment update, after ledger commit, and before marking success; inject timeouts with unknown ledger outcomes and assert eventual consistency with exactly one posting."
+          },
+          {
+            "title": "No poison-event, replay, or backpressure controls",
+            "severity": "high",
+            "mechanism": "Malformed events or persistent dependency failures can trigger unlimited provider retries, while manual replay can overlap automatic retries and starve fresh payment traffic.",
+            "required_control": "Classify retryable and permanent failures, cap exponential retries with jitter, quarantine poison events, isolate workloads, sweep durable ready rows, and audit/rate-limit manual replay. Monitor oldest inbox age rather than queue depth alone.",
+            "recovery": "Pause the offending replay cohort, continue fresh-event processing, then retry quarantined events in controlled batches after remediation.",
+            "failure_test": "Combine automatic retry and manual replay of a permanently failing event while processing fresh events; verify bounded attempts, quarantine, and acceptable fresh-event latency."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "concurrent-withdrawal",
+      "skill": "design-payment-ledger",
+      "artifact_sha256": "d9fb2237062214bb69d798b981b8047c89191747a4f036a1240e5dbae2681313",
+      "installed_skill_sha256": null,
+      "agent": "codex",
+      "mode": "baseline",
+      "exit_code": 0,
+      "duration_ms": 30396,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 27165,
+        "cached_input_tokens": 26112,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1047,
+        "reasoning_output_tokens": 166
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Unsafe for production: concurrent withdrawals can exceed available funds, retries can duplicate withdrawals, and invalid amounts can credit the wallet.",
+        "findings": [
+          {
+            "title": "Concurrent withdrawals can overspend",
+            "severity": "critical",
+            "mechanism": "Under READ COMMITTED, both workers can read 1,000 and approve 700 and 600. Each writes a balance derived from stale state, producing withdrawals totaling 1,300 while the final balance is 300 or 400.",
+            "required_control": "Use a single atomic conditional debit (`UPDATE ... SET available = available - amount WHERE id = ? AND available >= amount`) and require exactly one affected row, or lock the wallet row with `SELECT ... FOR UPDATE` before checking and updating. Create the withdrawal in the same transaction.",
+            "recovery": "Detect ledger-versus-balance discrepancies, freeze affected wallets, and repair through auditable compensating entries; never silently delete withdrawal records or overwrite balances.",
+            "failure_test": "Run synchronized concurrent withdrawals of 700 and 600 against a 1,000 balance repeatedly. Exactly one must succeed, the other must return insufficient funds, the final balance must match the successful debit, and only one withdrawal row may exist."
+          },
+          {
+            "title": "No idempotency protection",
+            "severity": "high",
+            "mechanism": "A client or worker retry after a timeout can execute the transaction again and create another debit and withdrawal because no stable request identifier is enforced.",
+            "required_control": "Require an idempotency key or withdrawal ID, enforce a database unique constraint, and return the previously committed result for duplicate requests. Keep deduplication and debit in the same transaction.",
+            "recovery": "Reconcile duplicate request identifiers and reverse confirmed duplicates with compensating transactions after verifying no downstream payout occurred; escalate ambiguous payout state for manual review.",
+            "failure_test": "Submit the same request concurrently and retry it after simulating a lost success response. There must be one debit and one withdrawal record, and every attempt must return the same result."
+          },
+          {
+            "title": "Non-positive amounts are accepted",
+            "severity": "high",
+            "mechanism": "A negative amount passes the funds check and subtraction increases the wallet balance; zero creates meaningless withdrawal records.",
+            "required_control": "Reject amounts less than or equal to zero before opening the transaction and enforce `amount_atomic > 0` with a database CHECK constraint. Apply appropriate maximum and currency/integer bounds.",
+            "recovery": "Quarantine invalid withdrawals, calculate their balance impact, and correct it through audited compensating entries.",
+            "failure_test": "Verify that zero, negative, and out-of-range amounts are rejected without changing the wallet or creating a withdrawal row."
+          },
+          {
+            "title": "Withdrawal outcome and recovery state are underspecified",
+            "severity": "medium",
+            "mechanism": "The record has no shown status or linkage to downstream payout attempts, so crashes and timeouts after database commit can cause a committed debit to be abandoned or paid multiple times by recovery workers.",
+            "required_control": "Use an explicit withdrawal state machine and transactional outbox. Make downstream dispatch idempotent, persist provider references, and define terminal success, retryable failure, and compensating refund transitions.",
+            "recovery": "Resume pending withdrawals from durable state; retry only with the same idempotency identity. On definitive payout failure, atomically post a compensating credit and mark the withdrawal failed/refunded. Do not refund an ambiguous provider outcome until reconciled.",
+            "failure_test": "Inject crashes before commit, after commit but before dispatch, during dispatch, and after provider success but before acknowledgement. Each case must converge to exactly one payout or one refund, with no lost or duplicated funds."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "concurrent-withdrawal",
+      "skill": "design-payment-ledger",
+      "artifact_sha256": "d9fb2237062214bb69d798b981b8047c89191747a4f036a1240e5dbae2681313",
+      "installed_skill_sha256": "33de4508fbd91bcfe719b4673eface200b4ac8edaeddd4700582682503a752ab",
+      "agent": "codex",
+      "mode": "skill",
+      "exit_code": 0,
+      "duration_ms": 38414,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 46918,
+        "cached_input_tokens": 25088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1255,
+        "reasoning_output_tokens": 126
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Unsafe for production: concurrent withdrawals can exceed funds while the stored balance remains plausible, and the change lacks journal, idempotency, and amount-validation controls.",
+        "findings": [
+          {
+            "title": "Concurrent read-then-write permits overspending and balance drift",
+            "severity": "critical",
+            "mechanism": "Under READ COMMITTED, both workers can read 1,000 and approve 700 and 600. Their absolute updates serialize but overwrite from stale values, so both withdrawal rows commit while availableAtomic ends at 300 or 400 instead of reflecting 1,300 withdrawn.",
+            "required_control": "Use one atomic conditional update such as availableAtomic = availableAtomic - amountAtomic WHERE id = walletId AND availableAtomic >= amountAtomic, requiring exactly one updated row; alternatively lock the wallet with SELECT FOR UPDATE. Keep the withdrawal/journal posting in the same transaction and retry the whole transaction on retryable database errors.",
+            "recovery": "Pause withdrawals for affected wallets, reconstruct balances from authoritative withdrawal and ledger records, prevent or reverse the unauthorized excess payout, and post linked corrections rather than overwriting history.",
+            "failure_test": "Start 700- and 600-unit withdrawals concurrently behind a barrier against a 1,000-unit wallet. Assert exactly one commits, the other reports insufficient funds, the final balance matches the committed withdrawal, and no rejected withdrawal row exists."
+          },
+          {
+            "title": "Balance mutation has no durable double-entry journal",
+            "severity": "critical",
+            "mechanism": "availableAtomic is directly decremented and only a withdrawal business row is created. There are no balanced, immutable entries proving the customer-liability reduction and withdrawal/clearing leg, so balances cannot be independently rebuilt or economically validated.",
+            "required_control": "Post an immutable, per-asset balanced ledger transaction using an approved withdrawal template, with account ownership, tenant, ledger, and asset validation. Treat availableAtomic only as a synchronous guarded projection that is reconcilable to the journal.",
+            "recovery": "Reconstruct missing journal transactions from uniquely identified withdrawal evidence under controlled repair, reconcile the projection, and use linked adjustments for discrepancies.",
+            "failure_test": "Verify each committed withdrawal creates one atomic balanced journal transaction; inject failure after every write boundary and assert either all wallet, withdrawal, and journal effects commit or none do. Rebuild available balances from the journal and compare exactly."
+          },
+          {
+            "title": "Retries can create duplicate withdrawals",
+            "severity": "high",
+            "mechanism": "The API accepts no stable operation key and defines no uniqueness constraint. Client, worker, or ambiguous-commit retries can execute the same logical withdrawal multiple times.",
+            "required_control": "Require an idempotency key scoped to the tenant/wallet or business operation, enforce it with a database unique constraint, and return the original result for duplicate requests with identical parameters while rejecting key reuse with different parameters.",
+            "recovery": "Identify duplicates by durable request/provider evidence, stop unprocessed duplicates, and reverse already-posted duplicates with linked correction transactions; never delete posted history.",
+            "failure_test": "Send the same request concurrently and retry after a simulated lost commit response. Assert one financial effect and one canonical withdrawal; also assert reuse of the key with a different amount is rejected."
+          },
+          {
+            "title": "Non-positive amounts are accepted",
+            "severity": "high",
+            "mechanism": "Zero and negative values pass the insufficient-funds check. A negative withdrawal increases availableAtomic while recording a negative withdrawal, corrupting balances and potentially enabling later spending.",
+            "required_control": "Reject amountAtomic <= 0 at the trusted service boundary and enforce a database CHECK constraint on withdrawal amounts. Validate the asset and its atomic-unit scale as part of the operation.",
+            "recovery": "Block affected wallets, locate all non-positive withdrawals, reconstruct correct balances, and post linked corrections for any committed financial effects.",
+            "failure_test": "Submit zero, negative, minimum-valid, and oversized amounts. Assert zero/negative values fail at both service and database layers without changing balances or creating withdrawals."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "aggregate-reconciliation",
+      "skill": "reconcile-payment-systems",
+      "artifact_sha256": "219699490790e69fa44c33730d855e14d44da49344d72aec6303ec3e71acfade",
+      "installed_skill_sha256": null,
+      "agent": "codex",
+      "mode": "baseline",
+      "exit_code": 0,
+      "duration_ms": 26695,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 27123,
+        "cached_input_tokens": 13056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 732,
+        "reasoning_output_tokens": 67
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Net-total equality cannot prove population completeness. Offset omissions can produce PASSED, so this change must add extraction-completeness controls and row-level reconciliation before production use.",
+        "findings": [
+          {
+            "title": "Offsetting omissions produce false PASSED results",
+            "severity": "critical",
+            "mechanism": "The implementation compares only aggregate net amounts. Missing +1,000 and -1,000 rows cancel, leaving equal totals despite an incomplete provider population.",
+            "required_control": "Reconcile records at transaction/settlement-row level using stable identifiers, amount, currency, and relevant status; separately compare row counts and gross credit/debit totals. PASSED must require every control to pass.",
+            "recovery": "Mark the run invalid, prevent downstream close or settlement actions, re-extract the same immutable period, rerun reconciliation, and retain the failed run plus discrepancy evidence for audit.",
+            "failure_test": "Omit one +1,000 row and one -1,000 row; assert status is FAILED or INCOMPLETE despite differenceAtomic being zero."
+          },
+          {
+            "title": "Paginated extraction has no completeness proof",
+            "severity": "critical",
+            "mechanism": "A skipped, duplicated, failed, or truncated page is indistinguishable from a complete export because reconcile receives only arrays and no pagination metadata.",
+            "required_control": "Require successful traversal to an explicit terminal page, verify page sequence/cursors and provider-reported counts or control totals, deduplicate stable row IDs, and fail closed on retries, cursor changes, or partial responses.",
+            "recovery": "Persist extraction checkpoints and page metadata, discard or quarantine partial datasets, resume safely or restart against an immutable snapshot, then rerun before publishing a result.",
+            "failure_test": "Simulate a missing middle page, duplicate page, repeated cursor, failed final page, and premature empty page; each must prevent PASSED."
+          },
+          {
+            "title": "Empty or wrong-scope datasets can pass",
+            "severity": "high",
+            "mechanism": "Two empty arrays—or two consistently filtered datasets for the wrong date, account, currency, or settlement state—produce PASSED without proving the intended reconciliation scope.",
+            "required_control": "Bind both inputs to validated account, currency, timezone, and immutable period metadata; require expected non-empty populations or an independently verified zero-activity assertion; reconcile currencies separately.",
+            "recovery": "Invalidate the result, correct the scope or snapshot, re-extract both sources, and rerun without overwriting prior audit records.",
+            "failure_test": "Test both inputs empty during known activity, mismatched dates/accounts/currencies, and data changing between pages; all must fail closed rather than return PASSED."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "aggregate-reconciliation",
+      "skill": "reconcile-payment-systems",
+      "artifact_sha256": "219699490790e69fa44c33730d855e14d44da49344d72aec6303ec3e71acfade",
+      "installed_skill_sha256": "3c2c5cd8179d00c6c00e4c058ca0dab526532c8d9bdb8a3185948f063b2c8dcd",
+      "agent": "codex",
+      "mode": "skill",
+      "exit_code": 0,
+      "duration_ms": 35360,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 47035,
+        "cached_input_tokens": 27136,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1302,
+        "reasoning_output_tokens": 102
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "Reject for production. Equal aggregate totals do not prove complete or correctly matched populations; the documented omitted +1,000/−1,000 rows produce a false PASS.",
+        "findings": [
+          {
+            "title": "Incomplete paginated export can pass",
+            "severity": "critical",
+            "mechanism": "Pagination gaps can omit offsetting rows while providerTotal still equals ledgerTotal.",
+            "required_control": "Before reconciliation, build an immutable source manifest containing snapshot/report ID, page cursors, expected and received page counts, row counts, hashes, schema fingerprint, retrieval time, and provider control totals. Any gap, cursor loop, duplicate page, or mismatch must return INCOMPLETE_SOURCE, never PASSED.",
+            "recovery": "Quarantine the run, reacquire all pages from the same provider snapshot/checkpoint, or create a new versioned run if that snapshot cannot be reproduced. Preserve the failed run and evidence.",
+            "failure_test": "Omit a middle page containing +1,000 and -1,000 rows; expect INCOMPLETE_SOURCE despite a zero aggregate difference. Also test missing final page, duplicate page, and cursor loop."
+          },
+          {
+            "title": "Aggregate-only comparison hides record-level errors",
+            "severity": "critical",
+            "mechanism": "Equal totals allow missing, duplicate, misclassified, or wrong-counterparty records to cancel each other without detection.",
+            "required_control": "Deduplicate both populations, then perform deterministic double-sided matching using stable financial IDs. Require every provider and ledger row to be matched, explicitly excluded, ambiguous, or exceptional; publish count and value coverage separately for each side.",
+            "recovery": "Retain raw inputs and immutable match decisions, classify unmatched or duplicate records, correct through normal ledger/provider workflows, and rerun without deleting prior exceptions.",
+            "failure_test": "Use equal totals where one provider +1,000 and one provider -1,000 have no ledger counterparts while different ledger rows offset them; expect MISSING_INTERNAL/MISSING_PROVIDER exceptions and a failed run. Also add one provider-only duplicate and require detection."
+          },
+          {
+            "title": "Population and monetary semantics are undefined",
+            "severity": "high",
+            "mechanism": "The function accepts arbitrary arrays and compares netAtomic without proving that scope, cutoff, currency, lifecycle state, timezone, or normalization versions agree. Cross-currency or period differences can therefore pass or fail incorrectly.",
+            "required_control": "Define run identity and source contracts: merchant/entity scope, reconciliation layer, period and cutoff timezone, late-arrival policy, authoritative date basis, currency/asset, atomic-unit scale, included journal states/types, schema version, and normalization version. Compare equations per asset, never one blended total.",
+            "recovery": "Supersede the affected run, correct the source or normalization version, reprocess immutable raw records, and preserve the original result for audit.",
+            "failure_test": "Test mixed currencies with equal numeric atomic totals, major-unit versus atomic-unit input, an unknown journal type, DST/month-close boundaries, and a late settlement after cutoff; each must fail validation or produce the specified exception rather than PASS."
+          },
+          {
+            "title": "Result lacks reproducible evidence and safe rerun behavior",
+            "severity": "high",
+            "mechanism": "Returning only status and differenceAtomic loses source identity, record outcomes, rule version, and exceptions, so a PASS cannot be audited and a failure cannot be safely recovered or verified.",
+            "required_control": "Persist an immutable run containing source manifests/checkpoints, raw and normalized row references, matching-rule version, matched/excluded/exception outcomes, control totals, and operator decisions. Give corrections stable idempotency keys and require approval evidence for manual financial adjustments.",
+            "recovery": "Resume or rerun from recorded snapshots; create a new immutable run for changed sources or rules. Rediscover an existing adjustment by its stable key instead of posting it again, and reverse any duplicate through the normal ledger path.",
+            "failure_test": "Replay the same run deterministically and require identical outcomes; concurrently replay one approved resolution and require exactly one ledger adjustment. Replacing a corrected provider export must supersede, not add to, the prior population."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "stale-payment-event",
+      "skill": "review-payment-state-machine",
+      "artifact_sha256": "8802c95643bc6aa11998eaf37bcd76a5e6938a0e1c3119e95d662dc5c65475e3",
+      "installed_skill_sha256": null,
+      "agent": "codex",
+      "mode": "baseline",
+      "exit_code": 0,
+      "duration_ms": 30863,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 27117,
+        "cached_input_tokens": 13056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1082,
+        "reasoning_output_tokens": 58
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "The change can double-charge an order, regress payment state from out-of-order events, and release fulfillment multiple times. Production rollout requires idempotent payment creation, monotonic event processing, and atomic exactly-once fulfillment controls.",
+        "findings": [
+          {
+            "title": "Checkout retries can create multiple successful charges",
+            "severity": "critical",
+            "mechanism": "Each retry creates a new payment intent without an idempotency key. After attempt A times out, attempt B can succeed, followed by A succeeding later, charging the customer twice.",
+            "required_control": "Use a stable per-order/payment-attempt idempotency key and persist the provider intent before retrying. Reconcile ambiguous timeouts with the provider before creating another intent. Enforce one collectible payment intent per order.",
+            "recovery": "Detect multiple successful intents, select the canonical payment, automatically void or refund extras, record an audit trail, and alert operations if automatic recovery fails.",
+            "failure_test": "Simulate create timing out after provider acceptance, retry the checkout, then complete both responses; assert only one collectible charge remains and the order references the canonical intent."
+          },
+          {
+            "title": "Out-of-order events can regress a paid order",
+            "severity": "critical",
+            "mechanism": "Every event blindly overwrites paymentStatus and providerIntentId. A stale failure for B can replace A's later success, leaving a charged and fulfilled order marked failed and associated with the wrong intent.",
+            "required_control": "Verify the event belongs to the order and expected intent, persist provider event IDs and ordering/version data, and apply an explicit monotonic state machine. Terminal success must not be downgraded by stale or conflicting events; competing intents require reconciliation.",
+            "recovery": "Re-fetch authoritative intent states from the provider, restore the canonical successful intent and paid status, and flag irreconcilable conflicts for manual review without retracting fulfillment automatically.",
+            "failure_test": "Deliver B success, A success, then stale B failure in multiple orderings; assert the final state remains paid, references the canonical successful intent, and records the ignored conflict."
+          },
+          {
+            "title": "Duplicate success events can release fulfillment repeatedly",
+            "severity": "high",
+            "mechanism": "Fulfillment runs after every succeeded event, and event delivery is explicitly duplicative. A crash after release but before durable event completion can also cause release again on retry.",
+            "required_control": "Deduplicate by provider event ID and guard fulfillment with a durable per-order release marker or idempotency key. Commit payment transition and fulfillment-outbox creation atomically; make the fulfillment consumer idempotent.",
+            "recovery": "Reconcile fulfillment records against paid orders, suppress duplicate releases, and compensate duplicate shipments or digital grants through an explicit operational workflow.",
+            "failure_test": "Send the same success event concurrently and repeatedly, including a simulated crash after fulfillment succeeds; assert exactly one fulfillment release and one durable processed-event record."
+          },
+          {
+            "title": "Payment update and fulfillment are not crash-consistent",
+            "severity": "high",
+            "mechanism": "The order is marked succeeded before fulfillment is released. If the process crashes or fulfillment transiently fails, the order remains paid with no durable indication that fulfillment must be retried.",
+            "required_control": "Use a transactional outbox or equivalent durable fulfillment job created atomically with the paid transition. Retry with backoff, idempotency, and dead-letter alerting.",
+            "recovery": "Replay pending outbox jobs and periodically reconcile paid-but-unfulfilled orders; route exhausted retries to operations while preserving the successful payment state.",
+            "failure_test": "Inject failures before fulfillment, during fulfillment, and after provider acknowledgment; restart processing and assert eventual single fulfillment without changing paid status."
+          },
+          {
+            "title": "Event authenticity and financial fields are not validated",
+            "severity": "high",
+            "mechanism": "The handler trusts orderId, paymentStatus, and paymentIntentId directly. A forged, misrouted, or mismatched event could mark an unrelated order paid and trigger fulfillment without confirming amount or currency.",
+            "required_control": "Verify webhook signatures and replay tolerance, derive order association from trusted provider metadata, and confirm intent status, amount, currency, account, and order ownership before accepting success.",
+            "recovery": "Quarantine invalid events, revoke or stop unshipped fulfillment where safe, reconcile affected orders with provider records, and preserve evidence for audit and incident response.",
+            "failure_test": "Submit invalid-signature, wrong-order, wrong-amount, wrong-currency, and unknown-intent success events; assert rejection, no order mutation, and no fulfillment."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "case_id": "stale-payment-event",
+      "skill": "review-payment-state-machine",
+      "artifact_sha256": "8802c95643bc6aa11998eaf37bcd76a5e6938a0e1c3119e95d662dc5c65475e3",
+      "installed_skill_sha256": "3cb8fa06b2788b146b1cf722ad7bb8c9d2859da7d621f44c04a459365d4baf99",
+      "agent": "codex",
+      "mode": "skill",
+      "exit_code": 0,
+      "duration_ms": 36181,
+      "requested_model": "gpt-5.6-sol",
+      "resolved_models": [
+        "gpt-5.6-sol"
+      ],
+      "usage": {
+        "input_tokens": 46556,
+        "cached_input_tokens": 23040,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1174,
+        "reasoning_output_tokens": 42
+      },
+      "output": {
+        "decision": "changes_required",
+        "summary": "The change is unsafe for production: it creates uncorrelated attempts, uses last-write-wins state, and can double-charge or double-fulfill an order. Payment attempts and fulfillment must be idempotent, evidence-driven, and recoverable.",
+        "findings": [
+          {
+            "title": "Retries can create two successful payments",
+            "severity": "critical",
+            "mechanism": "Attempt A has an indeterminate timeout, but retryCheckout creates B without an idempotency key, attempt record, or inquiry. Both can later succeed, exceeding the order amount.",
+            "required_control": "Persist payment intent and attempt entities with stable provider IDs and command idempotency keys. Block recreation while an attempt is indeterminate; inquire first. Atomically enforce total successful/captured amount <= order amount and detect losing-attempt success.",
+            "recovery": "Record both successes, prevent additional fulfillment, select the intended payment, and idempotently void, reverse, or refund the excess payment. Reconcile provider and ledger records and alert operations.",
+            "failure_test": "Time out A, create and succeed B, then deliver late success for A twice; assert one fulfillment, both successes retained, excess-payment alert raised, and exactly one compensation command."
+          },
+          {
+            "title": "Stale failure can overwrite authoritative success",
+            "severity": "high",
+            "mechanism": "orders.update applies events by arrival order. The stale failure for B can replace the order's successful state and providerIntentId even though another attempt succeeded.",
+            "required_control": "Store immutable events and per-attempt state. Apply guarded transitions using provider sequence/version or effective time, evidence precedence, prior state, and optimistic locking. Derive order payment state from attempts; route stale or contradictory facts to reconciliation.",
+            "recovery": "Restore the state supported by stronger provider evidence, retain the stale event for audit, rebuild the order summary from attempts, and reconcile provider/ledger state.",
+            "failure_test": "Apply B success, A late success, then an older B failure, including equal timestamps with a lower provider version; assert success remains authoritative and the stale event is recorded but cannot regress state."
+          },
+          {
+            "title": "Duplicate events can release fulfillment repeatedly",
+            "severity": "critical",
+            "mechanism": "Every duplicated succeeded event invokes fulfillment.release with no event deduplication or fulfillment idempotency guard.",
+            "required_control": "Deduplicate by provider event ID and make fulfillment release atomically idempotent per order and policy version. Use an outbox/state transition so payment persistence and the single fulfillment command cannot diverge.",
+            "recovery": "Stop further release attempts, identify duplicate deliveries, cancel or recall reversible fulfillment, restore inventory where possible, and escalate irreversible duplicates for operational/customer remediation.",
+            "failure_test": "Deliver the same success concurrently and repeatedly, then deliver success events for both A and B; assert exactly one fulfillment decision and one downstream release."
+          },
+          {
+            "title": "Single order status destroys attempt identity and auditability",
+            "severity": "critical",
+            "mechanism": "One paymentStatus and providerIntentId conflate order, multiple attempts, capture evidence, and fulfillment. Each event overwrites the prior provider identity, preventing correct late-success classification and reconciliation.",
+            "required_control": "Separate order/payment intent, payment attempt, capture, ledger transaction, and fulfillment records with one-to-many cardinality. Preserve source event, prior/next state, observed/effective times, original provider status, amounts, currency, and mapping/policy versions.",
+            "recovery": "Reconstruct attempts and captures from provider inquiries, event logs, and ledger evidence; freeze ambiguous fulfillment; then migrate the derived order summary without deleting historical facts.",
+            "failure_test": "Replay the complete A/B sequence in every relevant delivery order and verify both attempt histories remain representable, captured totals reconcile to the order amount, and fulfillment is derived from named provider evidence rather than a generic status."
+          }
+        ]
+      },
+      "error": null
+    }
+  ]
+}

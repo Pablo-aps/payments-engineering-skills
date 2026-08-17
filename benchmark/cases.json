@@ -1,0 +1,141 @@
+{
+  "version": 2,
+  "prompt": "Review case.md as if it were a production payment change. Identify concrete correctness risks, required controls, recovery behavior, and minimum failure tests. Do not edit files. Return concise JSON matching the required output schema.",
+  "cases": [
+    {
+      "id": "ambiguous-refund-timeout",
+      "skill": "implement-idempotent-payments",
+      "artifact": "benchmark/fixtures/ambiguous-refund-timeout.md",
+      "criteria": [
+        {
+          "id": "indeterminate-outcome",
+          "description": "Treats timeout or server error as an unknown outcome rather than final failure.",
+          "patterns": ["indeterminate", "unknown outcome", "uncertain outcome", "may have (succeeded|executed|been accepted)"]
+        },
+        {
+          "id": "stable-provider-key",
+          "description": "Requires reuse of the same provider idempotency key and rejects a fresh key during recovery.",
+          "patterns": ["reuse.{0,40}(same|original).{0,30}(idempotency )?key", "same.{0,30}(idempotency )?key", "fresh key.{0,50}(duplicate|unsafe|second)", "new key.{0,50}(duplicate|unsafe|second)"]
+        },
+        {
+          "id": "authoritative-recovery",
+          "description": "Uses inquiry, webhook evidence, or reconciliation before another mutation.",
+          "patterns": ["(provider|object).{0,30}inquir", "webhook.{0,50}(evidence|confirm|reconcil)", "reconcil", "retrieve.{0,40}(refund|provider|object)"]
+        },
+        {
+          "id": "late-success-test",
+          "description": "Requires a lost-response or timeout test with later provider success and one effect.",
+          "patterns": ["(lost response|timeout).{0,80}(late|later).{0,40}success", "late success", "exactly one.{0,30}refund", "refund count.{0,20}(one|1)"]
+        }
+      ]
+    },
+    {
+      "id": "duplicate-webhook",
+      "skill": "build-reliable-payment-webhooks",
+      "artifact": "benchmark/fixtures/duplicate-webhook.md",
+      "criteria": [
+        {
+          "id": "durable-acceptance",
+          "description": "Persists an inbox record before acknowledgement and does not rely on process memory.",
+          "patterns": ["durable inbox", "persist.{0,50}(before|prior).{0,30}(ack|2xx|200)", "database.{0,40}dedup", "in-memory.{0,30}(unsafe|insufficient|lost)"]
+        },
+        {
+          "id": "semantic-effect-identity",
+          "description": "Separates delivery identity from idempotency of the financial effect.",
+          "patterns": ["semantic.{0,30}(idempot|key|duplicate)", "effect.{0,40}idempot", "object.{0,30}(event type|event[.]type)", "distinct event ids"]
+        },
+        {
+          "id": "guarded-ordering",
+          "description": "Rejects arrival order as lifecycle truth and requires guarded transitions or current evidence.",
+          "patterns": ["arrival order", "out.of.order", "stale.{0,40}(guard|transition|overwrite)", "guarded transition", "monotonic"]
+        },
+        {
+          "id": "crash-and-duplicate-tests",
+          "description": "Tests crash after effect plus duplicate and reordered delivery.",
+          "patterns": ["crash.{0,60}(after|between).{0,50}(effect|side effect|post)", "duplicate.{0,50}(reorder|out.of.order|crash)", "distinct.{0,30}event ids"]
+        }
+      ]
+    },
+    {
+      "id": "concurrent-withdrawal",
+      "skill": "design-payment-ledger",
+      "artifact": "benchmark/fixtures/concurrent-withdrawal.md",
+      "criteria": [
+        {
+          "id": "race-detected",
+          "description": "Identifies the stale-read, lost-update, or concurrent overspend race.",
+          "patterns": ["race", "lost update", "write skew", "concurrent.{0,50}(withdraw|debit|read)"]
+        },
+        {
+          "id": "database-concurrency-control",
+          "description": "Requires an explicit database-level atomic guard, lock, or serializable retry.",
+          "patterns": ["for update", "serializable", "atomic.{0,30}(conditional|guard|update|debit)", "compare.and.(set|swap)", "row lock"]
+        },
+        {
+          "id": "journal-authority",
+          "description": "Requires an immutable balanced journal instead of mutable balance-only history.",
+          "patterns": ["double.entry", "immutable.{0,30}journal", "journal.{0,40}(authoritative|system of record|entry)", "balanced entr"]
+        },
+        {
+          "id": "deterministic-race-test",
+          "description": "Tests both withdrawals concurrently with one post, one rejection, and balance 300.",
+          "patterns": ["(700|600).{0,80}(concurrent|simultaneous)", "one.{0,20}(succeed|post).{0,40}one.{0,20}(fail|reject)", "ending.{0,30}(300|balance)", "balance.{0,20}300"]
+        }
+      ]
+    },
+    {
+      "id": "aggregate-reconciliation",
+      "skill": "reconcile-payment-systems",
+      "artifact": "benchmark/fixtures/aggregate-reconciliation.md",
+      "criteria": [
+        {
+          "id": "aggregate-is-insufficient",
+          "description": "Rejects aggregate equality as proof of reconciliation.",
+          "patterns": ["aggregate.{0,60}(insufficient|not|does not|cannot|false|mask|hide)", "zero difference.{0,60}(not|doesn.t|cannot|false|mask|hide)", "totals.{0,60}(hide|mask|cancel|offset)"]
+        },
+        {
+          "id": "source-completeness",
+          "description": "Requires a source manifest, pagination/file completeness, and schema/control evidence.",
+          "patterns": ["source manifest", "completeness", "missing.{0,30}(file|page|row)", "page.{0,30}(count|cursor|complete)"]
+        },
+        {
+          "id": "double-sided-item-matching",
+          "description": "Requires item-level matching in both directions with explicit residuals.",
+          "patterns": ["item.level", "both directions", "double.sided", "provider.to.ledger.{0,40}ledger.to.provider", "unmatched.{0,30}(both|provider|ledger)"]
+        },
+        {
+          "id": "offsetting-omission-test",
+          "description": "Tests offsetting missing rows that leave a zero aggregate difference.",
+          "patterns": ["offsetting", "missing.{0,40}([+]?1,?000|positive).{0,50}(-1,?000|negative)", "zero aggregate.{0,50}(missing|omission|exception)"]
+        }
+      ]
+    },
+    {
+      "id": "stale-payment-event",
+      "skill": "review-payment-state-machine",
+      "artifact": "benchmark/fixtures/stale-payment-event.md",
+      "criteria": [
+        {
+          "id": "separate-entities",
+          "description": "Separates commercial intent, provider attempts, captures, and fulfillment.",
+          "patterns": ["separate.{0,50}(intent|attempt).{0,50}(capture|fulfillment)", "payment attempt.{0,50}(entity|table|record)", "one status.{0,40}(conflat|insufficient|unsafe)"]
+        },
+        {
+          "id": "double-success-detected",
+          "description": "Detects two successful attempts and requires excess-payment compensation.",
+          "patterns": ["two.{0,30}(success|successful)", "double (charge|capture|payment)", "excess.{0,30}(paid|payment|capture)", "compensat.{0,50}(duplicate|second|excess)"]
+        },
+        {
+          "id": "stale-evidence-guard",
+          "description": "Preserves contradictory facts and prevents stale failure from downgrading captured evidence.",
+          "patterns": ["stale.{0,40}(failure|event).{0,50}(overwrite|downgrade|guard)", "arrival order", "preserve.{0,40}(evidence|fact)", "guarded transition"]
+        },
+        {
+          "id": "fulfillment-and-late-success-test",
+          "description": "Makes fulfillment idempotent and tests late success plus reversed delivery order.",
+          "patterns": ["fulfillment.{0,30}idempot", "late success", "reversed.{0,30}(delivery|event|order)", "out.of.order.{0,40}(test|event)"]
+        }
+      ]
+    }
+  ]
+}

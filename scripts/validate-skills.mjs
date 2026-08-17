@@ -246,12 +246,120 @@ export async function validateRepository() {
     if (count < 4) errors.push(`${directory}: needs at least 4 failure fixtures; found ${count}`);
   }
 
+  const benchmark = JSON.parse(await readFile(path.join(root, "benchmark", "cases.json"), "utf8"));
+  if (benchmark.version !== 2) errors.push("benchmark/cases.json version must be 2");
+  if (!isNonEmpty(benchmark.prompt)) errors.push("benchmark/cases.json needs a fixed prompt");
+  const benchmarkIds = new Set();
+  const benchmarkSkills = new Set();
+  let exampleCount = 0;
+
+  for (const testCase of benchmark.cases ?? []) {
+    if (!isNonEmpty(testCase.id) || benchmarkIds.has(testCase.id)) {
+      errors.push(`benchmark has missing or duplicate ID ${testCase.id ?? "unknown"}`);
+    }
+    benchmarkIds.add(testCase.id);
+    if (!directories.includes(testCase.skill)) {
+      errors.push(`benchmark ${testCase.id}: unknown skill ${testCase.skill}`);
+    }
+    if (benchmarkSkills.has(testCase.skill)) {
+      errors.push(`benchmark ${testCase.id}: skill ${testCase.skill} has more than one case`);
+    }
+    benchmarkSkills.add(testCase.skill);
+    if (!isNonEmpty(testCase.artifact) || !testCase.artifact.startsWith("benchmark/fixtures/")) {
+      errors.push(`benchmark ${testCase.id}: artifact must be a blind benchmark/fixtures file`);
+    } else {
+      try {
+        const artifact = await readFile(path.join(root, testCase.artifact), "utf8");
+        if (!artifact.includes("```")) errors.push(`benchmark ${testCase.id}: artifact needs a reviewable code block`);
+        if (/Expected review signals|Primary evidence|Review with the skill|Use \$[a-z]/i.test(artifact)) {
+          errors.push(`benchmark ${testCase.id}: artifact leaks instructions or expected signals`);
+        }
+        if (artifact.includes(testCase.skill)) {
+          errors.push(`benchmark ${testCase.id}: artifact names the treatment skill`);
+        }
+      } catch {
+        errors.push(`benchmark ${testCase.id}: missing artifact ${testCase.artifact}`);
+      }
+    }
+
+    if (!Array.isArray(testCase.criteria) || testCase.criteria.length !== 4) {
+      errors.push(`benchmark ${testCase.id}: exactly 4 fixed criteria are required`);
+    }
+    const criterionIds = new Set();
+    for (const criterion of testCase.criteria ?? []) {
+      if (!isNonEmpty(criterion.id) || criterionIds.has(criterion.id)) {
+        errors.push(`benchmark ${testCase.id}: missing or duplicate criterion ID ${criterion.id ?? "unknown"}`);
+      }
+      criterionIds.add(criterion.id);
+      if (!isNonEmpty(criterion.description)) {
+        errors.push(`benchmark ${testCase.id}/${criterion.id}: missing description`);
+      }
+      if (!Array.isArray(criterion.patterns) || criterion.patterns.length === 0 || !criterion.patterns.every(isNonEmpty)) {
+        errors.push(`benchmark ${testCase.id}/${criterion.id}: patterns must be a non-empty string array`);
+      }
+      for (const pattern of criterion.patterns ?? []) {
+        try {
+          new RegExp(pattern, "is");
+        } catch {
+          errors.push(`benchmark ${testCase.id}/${criterion.id}: invalid pattern ${pattern}`);
+        }
+      }
+    }
+
+    try {
+      const example = await readFile(path.join(root, "examples", `${testCase.id}.md`), "utf8");
+      exampleCount += 1;
+      for (const heading of [
+        "## Scenario",
+        "## Unsafe implementation",
+        "## Failure mechanism",
+        "## Review with the skill",
+        "## Expected review signals",
+        "## Primary evidence",
+      ]) {
+        if (!example.includes(heading)) errors.push(`example ${testCase.id}: missing ${heading}`);
+      }
+      if (!example.includes(testCase.skill)) errors.push(`example ${testCase.id}: does not name ${testCase.skill}`);
+      if (!example.includes("https://")) errors.push(`example ${testCase.id}: missing primary-source URL`);
+    } catch {
+      errors.push(`example ${testCase.id}: missing examples/${testCase.id}.md`);
+    }
+  }
+
+  for (const directory of directories) {
+    if (!benchmarkSkills.has(directory)) errors.push(`${directory}: missing blind benchmark case`);
+  }
+
+  try {
+    const outputSchema = JSON.parse(await readFile(path.join(root, "benchmark", "output.schema.json"), "utf8"));
+    if (outputSchema.type !== "object" || outputSchema.additionalProperties !== false) {
+      errors.push("benchmark/output.schema.json must define a closed object");
+    }
+    for (const field of ["decision", "summary", "findings"]) {
+      if (!outputSchema.required?.includes(field)) errors.push(`benchmark output schema must require ${field}`);
+    }
+  } catch (error) {
+    errors.push(`invalid benchmark output schema (${error.message})`);
+  }
+
+  const readme = await readFile(path.join(root, "README.md"), "utf8");
+  const readmeLinks = [...readme.matchAll(/\]\((?!https?:|#)([^)#]+)(?:#[^)]+)?\)/g)].map((match) => match[1]);
+  for (const link of readmeLinks) {
+    try {
+      await access(path.resolve(root, link));
+    } catch {
+      errors.push(`README.md: broken local link ${link}`);
+    }
+  }
+
   return {
     errors,
     skillCount: directories.length,
     hazardCount: hazardsById.size,
     evaluationCount: evaluations.cases.length,
     fixtureCount: fixture.scenarios.length,
+    benchmarkCaseCount: benchmark.cases?.length ?? 0,
+    exampleCount,
   };
 }
 
@@ -263,7 +371,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   } else {
     console.log(
       `Validated ${result.skillCount} skills, ${result.hazardCount} hazards, `
-      + `${result.evaluationCount} evaluation cases, and ${result.fixtureCount} failure fixtures.`,
+      + `${result.evaluationCount} evaluation cases, ${result.fixtureCount} failure fixtures, `
+      + `${result.benchmarkCaseCount} blind benchmark cases, and ${result.exampleCount} examples.`,
     );
   }
 }
