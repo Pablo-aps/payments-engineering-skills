@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "skill": "build-reliable-payment-webhooks",
+  "sources": [
+    "https://docs.stripe.com/webhooks",
+    "https://docs.stripe.com/event-destinations",
+    "https://docs.adyen.com/development-resources/webhooks/handle-webhook-events/",
+    "https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures",
+    "https://developer.paypal.com/api/rest/webhooks/rest/"
+  ],
+  "hazards": [
+    {
+      "id": "WHK-001",
+      "severity": "critical",
+      "mechanism": "Middleware parses, decompresses, decodes, or reserializes the body before signature verification.",
+      "evidence": "Trace bytes from the socket through proxy and framework middleware to the verifier, including content encoding and body limits.",
+      "control": "Capture the exact signed representation and call the provider verifier before parsing or side effects.",
+      "detection": "Measure verification failures after deployments by route, content type, and middleware version.",
+      "recovery": "Restore raw-body handling, rotate a secret only if exposure occurred, and replay provider-retained events safely.",
+      "test": "Show that whitespace, key order, Unicode normalization, and decompression changes fail verification."
+    },
+    {
+      "id": "WHK-002",
+      "severity": "high",
+      "mechanism": "A correctly signed delivery is replayed inside the timestamp tolerance and repeats a financial or fulfillment effect.",
+      "evidence": "Inspect signed timestamp policy, durable event identity, semantic effect keys, and replay-tool behavior.",
+      "control": "Combine bounded timestamp tolerance with durable delivery dedupe and idempotency at every downstream effect.",
+      "detection": "Track repeated event IDs, signature timestamps, sources, and effect-key conflicts.",
+      "recovery": "Suppress repeated effects, retain delivery evidence, and reverse any effect that escaped dedupe.",
+      "test": "Replay one valid payload concurrently several times before the signature expires."
+    },
+    {
+      "id": "WHK-003",
+      "severity": "critical",
+      "mechanism": "The same provider event ID arrives with a different payload digest, indicating corruption, namespace collision, or provider anomaly.",
+      "evidence": "Compare raw digest, provider, endpoint, account, environment, API version, and signing-key version for every delivery.",
+      "control": "On event-ID conflict, require digest equality; quarantine mismatches instead of treating them as ordinary duplicates.",
+      "detection": "Emit a high-severity alert for one identity with more than one digest.",
+      "recovery": "Freeze processing for that identity, retrieve authoritative provider state, and preserve both payloads for investigation.",
+      "test": "Deliver two validly signed but different payloads under one event ID and require quarantine."
+    },
+    {
+      "id": "WHK-004",
+      "severity": "critical",
+      "mechanism": "The provider emits distinct event IDs for the same object transition, so event-ID dedupe alone repeats the effect.",
+      "evidence": "Identify provider object, event type, modification/capture/refund ID, and downstream logical operation key.",
+      "control": "Deduplicate delivery by event ID and financial effect by a separate semantic key backed by uniqueness.",
+      "detection": "Report multiple event IDs mapping to one semantic effect and distinguish this from harmless state observations.",
+      "recovery": "Keep both events, suppress the duplicate effect, and reconcile if both already escaped.",
+      "test": "Send different event IDs carrying the same capture or refund fact."
+    },
+    {
+      "id": "WHK-005",
+      "severity": "critical",
+      "mechanism": "Event IDs or object IDs collide across test/live environments, connected accounts, apps, or provider organizations.",
+      "evidence": "Inspect livemode/environment, provider account or context, app, endpoint, and merchant identity used in keys and authorization.",
+      "control": "Namespace inbox and domain lookups by provider, environment, account/context, endpoint, and event identity.",
+      "detection": "Alert on events whose context cannot map to exactly one authorized internal tenant.",
+      "recovery": "Quarantine mis-scoped events and audit any cross-tenant state or fulfillment change.",
+      "test": "Deliver identical object and event IDs for two connected accounts and for test versus live."
+    },
+    {
+      "id": "WHK-006",
+      "severity": "critical",
+      "mechanism": "A stale failure, cancellation, or lower version arrives after newer success and overwrites domain state.",
+      "evidence": "Record provider version/sequence where available, provider-effective time, current state evidence, and legal transition rules.",
+      "control": "Apply guarded transitions or retrieve current provider state; never use receipt time as universal ordering.",
+      "detection": "Count stale and illegal transition attempts by provider mapping version.",
+      "recovery": "Preserve the stale fact, keep the stronger state, and open reconciliation when facts conflict.",
+      "test": "Deliver success before failure and repeat with equal timestamps but different provider versions."
+    },
+    {
+      "id": "WHK-007",
+      "severity": "high",
+      "mechanism": "Code treats an event snapshot as current state, or fetches latest state when the historical change itself is required for audit.",
+      "evidence": "Classify the provider format as snapshot or thin, its version semantics, and whether the use case needs latest truth or point-in-time evidence.",
+      "control": "Choose per effect: fetch current resource for current-state decisions; preserve the event snapshot/change set for audit and causality.",
+      "detection": "Log event version, fetch version, and mismatched snapshot/current fields used in decisions.",
+      "recovery": "Rebuild projections from the chosen authority and retain both representations with their timestamps.",
+      "test": "Change the provider object after event creation but before worker processing and assert the intended semantics."
+    },
+    {
+      "id": "WHK-008",
+      "severity": "critical",
+      "mechanism": "The endpoint returns 2xx before durable acceptance, then crashes and permanently loses the event.",
+      "evidence": "Locate the exact durable commit and provider acknowledgement boundary, including queue durability.",
+      "control": "Acknowledge only after authentication and durable inbox acceptance; return retryable failure when storage is unavailable.",
+      "detection": "Reconcile provider delivery logs to inbox identities and alert on accepted responses without rows.",
+      "recovery": "Request provider replay or backfill by API, then process through the normal inbox path.",
+      "test": "Crash immediately before and after inbox commit and verify provider-visible response behavior."
+    },
+    {
+      "id": "WHK-009",
+      "severity": "high",
+      "mechanism": "The inbox transaction commits but queue publication fails, leaving an accepted event that no worker sees.",
+      "evidence": "Inspect whether readiness is stored atomically, how workers discover rows, and how queue-to-inbox drift is measured.",
+      "control": "Treat the inbox as source of truth and use an outbox, CDC, or periodic ready-row sweeper in addition to queue wake-ups.",
+      "detection": "Alert on oldest RECEIVED/RETRYABLE age regardless of queue depth.",
+      "recovery": "Re-enqueue or directly claim stranded rows without changing their event identity.",
+      "test": "Fail queue publication after inbox commit and prove the sweeper still processes the event."
+    },
+    {
+      "id": "WHK-010",
+      "severity": "high",
+      "mechanism": "Automatic retries, manual replay, and poison events create a storm that starves new financial events or exhausts downstream APIs.",
+      "evidence": "Measure retry horizons, replay permissions, per-event attempts, queue partitions, backpressure, and quarantine policy.",
+      "control": "Use bounded exponential retry, per-tenant/provider quotas, poison quarantine, replay audit, and workload isolation.",
+      "detection": "Monitor oldest event age, retry amplification, quarantine growth, provider 429s, and new-event latency.",
+      "recovery": "Pause the offending replay cohort, drain current events, then resume quarantined items under controlled batches.",
+      "test": "Combine provider automatic retry with manual replay of a poison event while fresh events continue."
+    }
+  ]
+}

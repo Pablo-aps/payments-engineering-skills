@@ -12,7 +12,19 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -21,3 +33,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Validate SQL contracts
+        env:
+          PGURL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f skills/design-payment-ledger/assets/postgres-ledger.sql
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f skills/implement-idempotent-payments/assets/postgres-idempotency.sql
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f skills/build-reliable-payment-webhooks/assets/postgres-webhook-inbox.sql
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f test/sql-contracts.sql

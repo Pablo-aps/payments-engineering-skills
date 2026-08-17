@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "skill": "design-payment-ledger",
+  "sources": [
+    "https://docs.moderntreasury.com/ledgers/docs/ledgers-guarantees",
+    "https://docs.moderntreasury.com/ledgers/docs/handle-concurrency",
+    "https://docs.moderntreasury.com/ledgers/docs/verify-prior-ledger-states",
+    "https://www.postgresql.org/docs/current/transaction-iso.html",
+    "https://www.postgresql.org/docs/current/functions-sequence.html",
+    "https://docs.stripe.com/currencies"
+  ],
+  "hazards": [
+    {
+      "id": "LED-001",
+      "severity": "critical",
+      "mechanism": "A transaction balances numerically but posts to the wrong owner, account class, or economic leg.",
+      "evidence": "Trace each business event to account owner, normal balance, product obligation, and source evidence; do not stop at zero-sum arithmetic.",
+      "control": "Version an approved posting template per event type and validate account class, owner, tenant, asset, and allowed direction at posting time.",
+      "detection": "Compare posted entries with the versioned transaction matrix and reconcile clearing accounts that should return to zero.",
+      "recovery": "Post a linked correction or reversal under dual control; never edit the balanced but incorrect transaction.",
+      "test": "Submit a zero-sum transaction using another customer's liability account and require rejection."
+    },
+    {
+      "id": "LED-002",
+      "severity": "critical",
+      "mechanism": "Concurrent debits both pass a stale available-balance read and overdraw the same account or shared limit.",
+      "evidence": "Locate the exact read, lock or predicate, journal insert, projection update, isolation level, and retry boundary.",
+      "control": "Use a balance predicate in the atomic posting transaction, a locked version, or Serializable execution with whole-transaction retry.",
+      "detection": "Continuously query forbidden negative balances and record serialization, lock-wait, and insufficient-balance rejection rates.",
+      "recovery": "Stop further debits, identify the serialization order, reverse unauthorized excess movement, and reconcile downstream effects.",
+      "test": "Release two debit transactions from a barrier against one balance and prove only the permitted set commits."
+    },
+    {
+      "id": "LED-003",
+      "severity": "high",
+      "mechanism": "A backdated effective time changes historical reporting while the account's current write version and balance checks advance now.",
+      "evidence": "Separate recorded_at, effective_at, posting period, account version, and the time basis used by each balance projection.",
+      "control": "Define open-period rules, lock behavior independent of effective_at, and explicit late-adjustment periods.",
+      "detection": "Alert on entries posted into closed or aged periods and on rebuilt period balances that changed after close.",
+      "recovery": "Post a current-period adjustment or reopen through an approved close process while preserving both timestamps.",
+      "test": "Insert a backdated entry after newer activity and verify current limits, historical views, and close controls independently."
+    },
+    {
+      "id": "LED-004",
+      "severity": "high",
+      "mechanism": "Every transaction locks a shared omnibus or settlement account, turning correctness controls into a throughput bottleneck.",
+      "evidence": "Identify hot accounts, lock acquisition order, synchronous projections, contention metrics, and which balances actually gate risk.",
+      "control": "Lock only the customer or limit accounts that require synchronous decisions; update non-gating hot accounts asynchronously and verify projections.",
+      "detection": "Measure lock waits, serialization aborts, queue age, and per-account write concentration.",
+      "recovery": "Throttle affected flows, rebuild lagging projections, and migrate posting templates without changing journal history.",
+      "test": "Load-test many users posting through one omnibus account and prove user limits remain correct without serializing on the omnibus row."
+    },
+    {
+      "id": "LED-005",
+      "severity": "critical",
+      "mechanism": "An entry references an account from another tenant, ledger, or asset while the transaction still balances.",
+      "evidence": "Inspect composite foreign keys and posting authorization, not only UUID uniqueness.",
+      "control": "Carry tenant, ledger, and asset through composite keys or enforce them inside the trusted posting function.",
+      "detection": "Run invariant queries for cross-tenant, cross-ledger, and account-entry asset mismatches.",
+      "recovery": "Freeze the affected scope, reverse unauthorized postings, repair authorization boundaries, and review access logs.",
+      "test": "Attempt to post with a valid account ID owned by another tenant and require a database-level failure."
+    },
+    {
+      "id": "LED-006",
+      "severity": "high",
+      "mechanism": "The same posted transaction is reversed twice, or a partial correction silently reverses more than the remaining amount.",
+      "evidence": "Trace reversal identity, amount by asset, reason, approval, and prior corrections against the original transaction.",
+      "control": "Give every correction a stable operation key and enforce cumulative correction limits and explicit full-versus-partial semantics.",
+      "detection": "Query originals whose linked corrections exceed their amount or whose full reversal count exceeds one.",
+      "recovery": "Reverse the duplicate correction and reconcile all projections and external movements it triggered.",
+      "test": "Race two full reversals and multiple partial corrections against one original transaction."
+    },
+    {
+      "id": "LED-007",
+      "severity": "critical",
+      "mechanism": "Currency or token scale changes by provider, rail, or operation, causing a 100x or 1,000,000x posting error despite integer storage.",
+      "evidence": "Identify the versioned scale source for presentment, settlement, payout, and on-chain amounts at every boundary.",
+      "control": "Normalize at adapters into an internal asset registry, reject unsupported precision, and store source amount and conversion metadata.",
+      "detection": "Alert on impossible magnitude shifts, non-divisible payout amounts, and source-to-ledger unit mismatches.",
+      "recovery": "Block the adapter version, quantify affected postings, and use linked corrections after independent amount reconstruction.",
+      "test": "Cover JPY, a provider-specific HUF payout rule, and a six-decimal token in the same suite."
+    },
+    {
+      "id": "LED-008",
+      "severity": "critical",
+      "mechanism": "A lagging balance projection is treated as authoritative for a withdrawal or spend decision.",
+      "evidence": "Name projection freshness, consistency point, rebuild source, lag budget, and whether it participates in authorization.",
+      "control": "Authorize against the journal or a synchronously locked risk balance; reserve eventual projections for display and reporting.",
+      "detection": "Compare projection version to journal high-water mark and alert before lag exceeds the declared use-case budget.",
+      "recovery": "Pause gated operations, rebuild from the journal, and reconcile decisions made beyond the last verified version.",
+      "test": "Delay the projection consumer while debits continue and prove stale displayed balance cannot authorize spend."
+    },
+    {
+      "id": "LED-009",
+      "severity": "critical",
+      "mechanism": "Business state commits without ledger entries, or ledger entries commit without the event needed by downstream systems.",
+      "evidence": "Draw every database, journal, outbox, queue, and provider write with its atomic boundary and crash window.",
+      "control": "Co-locate business state, journal, and outbox in one database transaction where possible; otherwise define a recoverable saga and idempotent consumers.",
+      "detection": "Reconcile business operations to ledger operation keys and ledger transactions to required outbox records.",
+      "recovery": "Replay missing outbox events or create a classified ledger correction from durable source evidence.",
+      "test": "Crash after each write boundary and prove recovery converges without an extra financial effect."
+    },
+    {
+      "id": "LED-010",
+      "severity": "medium",
+      "mechanism": "A database sequence is assumed to be gapless or chronological, so aborted transactions look like missing money events.",
+      "evidence": "Find uses of serial IDs for legal numbering, completeness, event order, or external references.",
+      "control": "Use sequences only for uniqueness; create a separate committed numbering process where regulation or statements require gap handling.",
+      "detection": "Distinguish expected sequence gaps from missing journal operation keys and monitor each with different controls.",
+      "recovery": "Explain or formally void allocated numbers rather than rewriting sequence history.",
+      "test": "Abort an insert after nextval and verify completeness controls do not report a missing ledger transaction."
+    }
+  ]
+}

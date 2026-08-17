@@ -1,54 +1,98 @@
-version: 1
+version: 2
 entities:
   payment_intent:
+    cardinality:
+      payment_attempt: many
+      fulfillment: many
     initial: REQUIRES_PAYMENT_METHOD
-    states:
-      - REQUIRES_PAYMENT_METHOD
-      - PROCESSING
-      - PARTIALLY_CAPTURED
-      - CAPTURED
-      - CANCELED
-      - INDETERMINATE
-    transitions:
-      - from: REQUIRES_PAYMENT_METHOD
-        command: submit_attempt
-        to: PROCESSING
-        requires: [idempotency_key, payment_attempt_id]
-      - from: PROCESSING
-        fact: capture_confirmed
-        to: CAPTURED
-        guard: captured_amount_atomic == intended_amount_atomic
-        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
-      - from: PROCESSING
-        fact: partial_capture_confirmed
-        to: PARTIALLY_CAPTURED
-        guard: 0 < captured_amount_atomic < intended_amount_atomic
-        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
-      - from: PROCESSING
-        fact: provider_outcome_unknown
-        to: INDETERMINATE
-        effects: [schedule_provider_inquiry, block_duplicate_attempt]
-      - from: INDETERMINATE
-        fact: capture_confirmed
-        to: CAPTURED
-        guard: authoritative_provider_evidence
-        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
+    states: [REQUIRES_PAYMENT_METHOD, PROCESSING, PARTIALLY_PAID, PAID, CANCELED, INDETERMINATE, EXCESS_PAID]
+  payment_attempt:
+    cardinality:
+      authorization: many
+    states: [CREATED, REQUIRES_ACTION, PROCESSING, AUTHORIZED, DECLINED, CANCELED, INDETERMINATE]
+  authorization:
+    identity_is_replaced_on_reauthorization: true
+    states: [ACTIVE, PARTIALLY_CAPTURED, FULLY_CAPTURED, VOIDED, EXPIRED, SUPERSEDED]
+    independent_fields: [authorized_atomic, capturable_atomic, capture_before]
+  capture:
+    cardinality:
+      refund: many
+      dispute: many
+    states: [REQUESTED, INDETERMINATE, PENDING, SUCCEEDED, FAILED, REVERSED]
+  refund:
+    states: [REQUESTED, INDETERMINATE, PENDING, SUCCEEDED, FAILED, CANCELED]
+  dispute:
+    states: [OPEN, WON, LOST, WITHDRAWN]
+  fulfillment:
+    states: [HELD, APPROVED, EXECUTED, CANCELED, COMPENSATING, COMPENSATED]
+amount_invariants:
+  - id: one-asset-per-equation
+    expression: every amount equation is evaluated independently per asset
+  - id: intended-payment-cap
+    expression: intended_paid_atomic <= intended_amount_atomic unless state == EXCESS_PAID
+  - id: authorization-cap
+    expression: sum(successful_capture_atomic) <= active_authorized_atomic
+  - id: refund-cap
+    expression: sum(successful_or_pending_refund_atomic) <= refundable_atomic
+  - id: dispute-refund-exposure
+    expression: pending_refund_atomic + reimbursing_dispute_atomic <= captured_atomic or compensation_required
+transitions:
+  - entity: payment_intent
+    from: REQUIRES_PAYMENT_METHOD
+    command: submit_attempt
+    to: PROCESSING
+    requires: [operation_key, payment_attempt_id, optimistic_version]
+  - entity: payment_attempt
+    from: PROCESSING
+    fact: provider_outcome_unknown
+    to: INDETERMINATE
+    effects: [block_unsafe_new_attempt, schedule_provider_inquiry]
+  - entity: authorization
+    from: ACTIVE
+    command: partial_capture
+    to: PARTIALLY_CAPTURED
+    guard: capture_atomic <= capturable_atomic and now < capture_before
+    requires: [capture_operation_key, final_capture_flag, optimistic_version]
+  - entity: authorization
+    from: ACTIVE
+    fact: reauthorization_confirmed
+    to: SUPERSEDED
+    effects: [create_replacement_authorization, route_future_captures_to_replacement]
+  - entity: payment_intent
+    from: CANCELED
+    fact: late_capture_confirmed
+    to: EXCESS_PAID
+    effects: [block_duplicate_fulfillment, create_compensation_case]
+  - entity: refund
+    from: PENDING
+    fact: refund_failed
+    to: FAILED
+    effects: [post_returned_funds, notify_operations, evaluate_customer_remediation]
+evidence_precedence:
+  preserve_every_fact: true
+  do_not_order_by_receipt_time: true
+  stale_or_contradictory_action: CREATE_RECONCILIATION_EXCEPTION
 transition_record:
   required:
+    - entity_type
     - entity_id
     - prior_state
     - next_state
+    - prior_optimistic_version
     - source_type
     - source_id
+    - provider_effective_at
     - observed_at
     - rule_version
+    - amount_delta_atomic
+    - asset
 invalid_transition:
-  action: CREATE_RECONCILIATION_EXCEPTION
-  preserve_source_evidence: true
+  action: REJECT_AND_PRESERVE_EVIDENCE
+  open_reconciliation_on_external_fact: true
 fulfillment:
   default: HOLD
-  rules_are_versioned: true
+  policy_version_required: true
+  client_redirect_is_never_sufficient_evidence: true
 
-# This is a reviewable contract, not a universal lifecycle. Adapt states and
-# evidence to each rail. Refunds, disputes, settlement, and fulfillment should
-# normally be related entities rather than extra values on payment_intent.
+# Adapt this contract to the rail. Provider state names, capture rules, expiry,
+# reversal windows, and settlement finality are not universal.

@@ -11,7 +11,9 @@ test("all skills and evaluation cases satisfy repository rules", async () => {
   const result = await validateRepository();
   assert.deepEqual(result.errors, []);
   assert.equal(result.skillCount, 5);
-  assert.ok(result.evaluationCount >= 40);
+  assert.ok(result.hazardCount >= 50);
+  assert.ok(result.evaluationCount >= 65);
+  assert.ok(result.fixtureCount >= 20);
 });
 
 test("fixture scenarios use unique IDs and declare expected outcomes", async () => {
@@ -22,5 +24,7 @@ test("fixture scenarios use unique IDs and declare expected outcomes", async () 
     assert.ok(scenario.skill);
     assert.ok(scenario.input);
     assert.ok(scenario.expected);
+    assert.ok(Array.isArray(scenario.hazards));
+    assert.ok(scenario.hazards.length > 0);
   }
 });

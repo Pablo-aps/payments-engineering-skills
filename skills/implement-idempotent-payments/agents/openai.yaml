@@ -1,4 +1,4 @@
 interface:
   display_name: "Idempotent Payments"
   short_description: "Prevent duplicate payment mutations safely"
-  default_prompt: "Use $implement-idempotent-payments to make this payment mutation safe under retries and concurrency."
+  default_prompt: "Use $implement-idempotent-payments to run the hazard pass and make this mutation safe under retries, races, and ambiguous outcomes."

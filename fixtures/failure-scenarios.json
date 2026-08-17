@@ -1,35 +1,150 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Deterministic failure fixtures for implementations derived from the skills.",
   "scenarios": [
     {
-      "id": "concurrent-wallet-debits",
+      "id": "ledger-concurrent-wallet-debits",
       "skill": "design-payment-ledger",
+      "hazards": ["LED-002"],
       "input": { "available_atomic": "1000", "debits_atomic": ["700", "600"], "concurrent": true },
       "expected": { "posted_count": 1, "rejected_count": 1, "ending_available_atomic": "300" }
     },
     {
-      "id": "refund-timeout-late-success",
+      "id": "ledger-balanced-wrong-tenant",
+      "skill": "design-payment-ledger",
+      "hazards": ["LED-001", "LED-005"],
+      "input": { "debit_tenant": "merchant-a", "credit_tenant": "merchant-b", "asset": "USD", "balanced": true },
+      "expected": { "posted": false, "error_code": "POSTING_POLICY_VIOLATION" }
+    },
+    {
+      "id": "ledger-backdated-as-of",
+      "skill": "design-payment-ledger",
+      "hazards": ["LED-003"],
+      "input": { "effective_at": "2026-01-01T00:00:00Z", "recorded_at": "2026-01-03T00:00:00Z", "query_cutoff_recorded_at": "2026-01-02T00:00:00Z" },
+      "expected": { "included_in_reproduced_snapshot": false, "current_effective_balance_includes_entry": true }
+    },
+    {
+      "id": "ledger-idempotent-correction",
+      "skill": "design-payment-ledger",
+      "hazards": ["LED-006", "LED-007"],
+      "input": { "original_atomic": "1000", "currency": "JPY", "correction_atomic": "1000", "correction_requests": 2 },
+      "expected": { "posted_corrections": 1, "duplicate_results_replayed": 1, "net_atomic": "0" }
+    },
+
+    {
+      "id": "idempotency-refund-timeout-late-success",
       "skill": "implement-idempotent-payments",
-      "input": { "transport_result": "timeout", "later_provider_result": "succeeded", "retries": 2 },
+      "hazards": ["IDM-002", "IDM-010"],
+      "input": { "transport_result": "timeout", "first_inquiry": "not_found", "later_provider_result": "succeeded", "retries": 2 },
       "expected": { "provider_refund_count": 1, "local_terminal_state": "SUCCEEDED", "recovery_source": "provider_inquiry_or_event" }
     },
     {
-      "id": "duplicate-webhook-after-worker-crash",
+      "id": "idempotency-cached-provider-500",
+      "skill": "implement-idempotent-payments",
+      "hazards": ["IDM-003"],
+      "input": { "same_key_responses": [500, 500], "provider_object_state": "SUCCEEDED" },
+      "expected": { "local_state_before_inquiry": "INDETERMINATE", "new_key_used": false, "terminal_state": "SUCCEEDED" }
+    },
+    {
+      "id": "idempotency-regional-failover",
+      "skill": "implement-idempotent-payments",
+      "hazards": ["IDM-006"],
+      "input": { "operation_key": "op-42", "first_region": "EU", "failover_region": "US", "provider_dedupe_scope": "REGION" },
+      "expected": { "provider_mutation_count": 1, "failover_call_blocked_locally": true }
+    },
+    {
+      "id": "idempotency-stale-worker-fence",
+      "skill": "implement-idempotent-payments",
+      "hazards": ["IDM-008", "IDM-009"],
+      "input": { "stale_fencing_token": 7, "current_fencing_token": 8, "stale_worker_result": "FAILED", "current_result": "SUCCEEDED" },
+      "expected": { "stored_result": "SUCCEEDED", "stale_write_rejected": true, "outbox_events": 1 }
+    },
+
+    {
+      "id": "webhook-duplicate-after-worker-crash",
       "skill": "build-reliable-payment-webhooks",
+      "hazards": ["WHK-002", "WHK-004"],
       "input": { "deliveries": 2, "crash_after_effect": true, "event_id": "evt_fixture_1" },
-      "expected": { "inbox_rows": 1, "financial_effect_count": 1, "final_state": "PROCESSED" }
+      "expected": { "delivery_rows": 2, "inbox_rows": 1, "financial_effect_count": 1, "final_state": "PROCESSED" }
     },
     {
-      "id": "settlement-report-missing-page",
+      "id": "webhook-same-id-different-digest",
+      "skill": "build-reliable-payment-webhooks",
+      "hazards": ["WHK-003"],
+      "input": { "event_id": "evt_fixture_2", "payload_digests": ["sha256:a", "sha256:b"], "signatures_valid": true },
+      "expected": { "financial_effect_count": 0, "quarantined": true, "alert_code": "EVENT_DIGEST_CONFLICT" }
+    },
+    {
+      "id": "webhook-account-environment-collision",
+      "skill": "build-reliable-payment-webhooks",
+      "hazards": ["WHK-005"],
+      "input": { "event_id": "evt_same", "contexts": ["test/acct-a", "live/acct-a", "live/acct-b"] },
+      "expected": { "distinct_inbox_rows": 3, "credential_contexts": 3 }
+    },
+    {
+      "id": "webhook-inbox-queue-gap",
+      "skill": "build-reliable-payment-webhooks",
+      "hazards": ["WHK-008", "WHK-009", "WHK-010"],
+      "input": { "inbox_committed": true, "enqueue_crashed": true, "provider_redeliveries": 10, "sweeper_runs": 1 },
+      "expected": { "event_processed": true, "financial_effect_count": 1, "maximum_active_jobs": 1 }
+    },
+
+    {
+      "id": "reconciliation-settlement-missing-page",
       "skill": "reconcile-payment-systems",
+      "hazards": ["REC-001"],
       "input": { "expected_pages": 3, "received_pages": [1, 3], "aggregate_difference_atomic": "0" },
-      "expected": { "run_status": "INCOMPLETE", "exception_code": "INCOMPLETE_SOURCE" }
+      "expected": { "run_status": "INCOMPLETE", "matching_started": false, "exception_code": "INCOMPLETE_SOURCE" }
     },
     {
-      "id": "stale-failure-after-capture",
+      "id": "reconciliation-schema-reordered",
+      "skill": "reconcile-payment-systems",
+      "hazards": ["REC-003"],
+      "input": { "expected_columns": ["id", "gross", "fee"], "received_columns": ["id", "fee", "gross"] },
+      "expected": { "run_status": "QUARANTINED", "rows_imported": 0, "exception_code": "SCHEMA_FINGERPRINT_MISMATCH" }
+    },
+    {
+      "id": "reconciliation-provider-extra-row",
+      "skill": "reconcile-payment-systems",
+      "hazards": ["REC-004", "REC-005"],
+      "input": { "internal_rows": ["p-1"], "provider_rows": ["p-1", "p-2", "p-2"] },
+      "expected": { "matched": ["p-1"], "duplicate_source_rows": ["p-2"], "unmatched_provider_count_after_dedup": 1 }
+    },
+    {
+      "id": "reconciliation-corrected-rerun",
+      "skill": "reconcile-payment-systems",
+      "hazards": ["REC-009", "REC-010"],
+      "input": { "source_versions": [1, 2], "superseded_version": 1, "same_exception_reruns": 3 },
+      "expected": { "active_source_versions": [2], "adjustment_count": 1, "replayed_adjustment_results": 2 }
+    },
+
+    {
+      "id": "state-stale-failure-after-capture",
       "skill": "review-payment-state-machine",
+      "hazards": ["STM-005"],
       "input": { "current_state": "CAPTURED", "incoming_fact": "attempt_failed", "incoming_fact_is_stale": true },
       "expected": { "next_state": "CAPTURED", "exception_created": true, "evidence_preserved": true }
+    },
+    {
+      "id": "state-two-successful-attempts",
+      "skill": "review-payment-state-machine",
+      "hazards": ["STM-001", "STM-002"],
+      "input": { "intent_amount_atomic": "5000", "successful_attempts": [{ "id": "a1", "captured_atomic": "5000" }, { "id": "a2", "captured_atomic": "5000" }] },
+      "expected": { "fulfillment_count": 1, "incident_created": true, "duplicate_amount_atomic": "5000", "compensation_required": true }
+    },
+    {
+      "id": "state-concurrent-partial-captures",
+      "skill": "review-payment-state-machine",
+      "hazards": ["STM-003", "STM-006"],
+      "input": { "authorized_atomic": "1000", "existing_captured_atomic": "200", "concurrent_capture_atomic": ["600", "500"] },
+      "expected": { "total_captured_atomic_max": "1000", "overcapture_prevented": true }
+    },
+    {
+      "id": "state-pending-refund-dispute",
+      "skill": "review-payment-state-machine",
+      "hazards": ["STM-009", "STM-010"],
+      "input": { "captured_atomic": "1000", "refund_state": "PENDING", "refund_atomic": "1000", "dispute_state": "LOST", "dispute_atomic": "1000" },
+      "expected": { "automatic_second_reimbursement": false, "case_review_required": true, "maximum_uncontrolled_reimbursement_atomic": "0" }
     }
   ]
 }

@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "skill": "review-payment-state-machine",
+  "sources": [
+    "https://docs.stripe.com/payments/paymentintents/lifecycle",
+    "https://docs.stripe.com/payments/place-a-hold-on-a-payment-method",
+    "https://docs.stripe.com/payments/incremental-authorization",
+    "https://docs.stripe.com/refunds",
+    "https://docs.adyen.com/online-payments/build-your-integration/payment-result-codes/",
+    "https://developer.paypal.com/docs/checkout/standard/customize/authorization/"
+  ],
+  "hazards": [
+    {
+      "id": "STM-001",
+      "severity": "critical",
+      "mechanism": "One payment_status conflates commercial intent, attempt, authorization, capture, settlement, refund, dispute, and fulfillment.",
+      "evidence": "List every entity, cardinality, amount dimension, evidence source, and independent lifecycle hidden behind the field.",
+      "control": "Model separate entities and derive customer-facing summaries from them instead of making the summary authoritative.",
+      "detection": "Find transitions that mean different things by rail or overwrite another lifecycle dimension.",
+      "recovery": "Reconstruct child entities from provider and ledger evidence, then migrate reads before writes.",
+      "test": "Represent captured-but-not-settled, partially-refunded-and-disputed, and fulfilled-but-reversed without contradictory status."
+    },
+    {
+      "id": "STM-002",
+      "severity": "critical",
+      "mechanism": "Two payment attempts for one order both succeed after a timeout, failover, or customer retry.",
+      "evidence": "Inspect intent-to-attempt cardinality, winning-attempt rule, provider object IDs, idempotency keys, and late-success handling.",
+      "control": "Allow many attempts but enforce one intended payable amount, block new attempts while one is indeterminate, and classify late extra success.",
+      "detection": "Alert when successful captured totals across attempts exceed the commercial intent.",
+      "recovery": "Stop fulfillment duplication, select the intended payment, and refund/reverse the extra success idempotently.",
+      "test": "Let attempt B succeed after A timed out, then deliver a late success for A."
+    },
+    {
+      "id": "STM-003",
+      "severity": "critical",
+      "mechanism": "Every transition is legal, but concurrent partial captures, refunds, or disputes make cumulative amounts exceed their parents.",
+      "evidence": "Define intended, authorized, capturable, captured, refundable, refunded, disputed, and settled amounts per asset.",
+      "control": "Guard state and cumulative amount invariants atomically under optimistic versioning or locks.",
+      "detection": "Continuously verify amount conservation and remaining-capacity equations.",
+      "recovery": "Freeze further modifications, identify the racing operations, and reverse unintended excess movement.",
+      "test": "Race partial captures and refunds whose individual amounts are valid but combined total is not."
+    },
+    {
+      "id": "STM-004",
+      "severity": "critical",
+      "mechanism": "A provider confirms success after the local intent was canceled, expired, or declared failed following an ambiguous response.",
+      "evidence": "Distinguish local policy cancellation from authoritative provider cancellation and preserve the pending attempt identity.",
+      "control": "Keep ambiguous attempts recoverable and define a late-success compensation transition rather than rejecting the fact.",
+      "detection": "Alert on success facts for locally terminal intents or losing attempts.",
+      "recovery": "Record the success, block duplicate fulfillment, and execute the approved refund, void, or manual-review policy.",
+      "test": "Cancel locally after timeout, then receive capture confirmation and settlement."
+    },
+    {
+      "id": "STM-005",
+      "severity": "high",
+      "mechanism": "An older failure or cancellation fact overwrites a newer capture because transitions use arrival time or last-write-wins.",
+      "evidence": "Record source version/sequence, effective time, observed time, prior state, and strength of evidence.",
+      "control": "Use guarded transitions and an explicit evidence precedence policy; route contradictions to reconciliation.",
+      "detection": "Count stale and illegal transitions by mapping version and source.",
+      "recovery": "Restore the state supported by stronger evidence while preserving the stale fact and incident trail.",
+      "test": "Deliver stale failure after captured and with the same timestamp but lower provider version."
+    },
+    {
+      "id": "STM-006",
+      "severity": "critical",
+      "mechanism": "A partial capture is incorrectly marked final, or concurrent captures consume more than the remaining authorized amount.",
+      "evidence": "Inspect final_capture semantics, multicapture eligibility, remaining capturable amount, authorization expiry, and capture idempotency.",
+      "control": "Make capture a child operation with atomic remaining-amount guards and explicit finality.",
+      "detection": "Alert on captures after finalization, expiry, or cumulative cap exhaustion.",
+      "recovery": "Do not invent another capture; reconcile provider result and adjust fulfillment or refund excess.",
+      "test": "Race two final partial captures and attempt a later shipment capture."
+    },
+    {
+      "id": "STM-007",
+      "severity": "high",
+      "mechanism": "Reauthorization creates a new authorization ID, but captures continue against the expired original or history is overwritten.",
+      "evidence": "Model authorization lineage, honor/expiry windows, replacement ID, amount, and captures bound to each authorization.",
+      "control": "Create a new authorization entity linked to the prior one and route future captures to the active identity.",
+      "detection": "Alert on capture commands targeting superseded or expired authorization IDs.",
+      "recovery": "Resolve the active provider authorization before retrying and preserve both authorization records.",
+      "test": "Reauthorize near expiry and verify capture uses the replacement ID and shortened remaining window."
+    },
+    {
+      "id": "STM-008",
+      "severity": "high",
+      "mechanism": "An incremental authorization increases the amount and code assumes it also extended the original expiry.",
+      "evidence": "Track amount changes and expiry as independent fields sourced from the provider after every increment.",
+      "control": "Refresh capturable amount and capture-before deadline separately; schedule capture from the actual deadline.",
+      "detection": "Alert when fulfillment or capture scheduling exceeds the current authorization expiry.",
+      "recovery": "Reauthorize where supported or cancel/adjust fulfillment before attempting an expired capture.",
+      "test": "Approve an increment without changing expiry and advance time past the original deadline."
+    },
+    {
+      "id": "STM-009",
+      "severity": "critical",
+      "mechanism": "A refund remains pending while a dispute reimburses the customer, producing duplicate customer compensation and ledger exposure.",
+      "evidence": "Correlate charge, refund status, dispute lifecycle, provider balance entries, and customer communication.",
+      "control": "Make refunds and disputes separate entities with a cross-process compensation policy for the same captured amount.",
+      "detection": "Alert when pending refund plus open/won dispute coverage exceeds captured exposure.",
+      "recovery": "Follow provider-specific cancellation/acceptance policy, stop duplicate manual payout, and reconcile returned funds.",
+      "test": "Open a dispute while a refund is pending, then exercise both refund-failed and refund-succeeded outcomes."
+    },
+    {
+      "id": "STM-010",
+      "severity": "high",
+      "mechanism": "The system tells the customer a refund is complete, but the provider later marks it failed and returns funds to the platform balance.",
+      "evidence": "Define refund requested, pending, succeeded, failed, canceled, and returned-funds evidence plus notification timing.",
+      "control": "Communicate status precisely, listen for refund updates/failure, and keep alternative-remediation ownership.",
+      "detection": "Monitor aged pending refunds, failed refunds, and customer messages inconsistent with current state.",
+      "recovery": "Notify operations/customer, arrange an approved alternative refund, and post the provider-returned balance movement.",
+      "test": "Move a refund from pending to failed after an initial acknowledgement and verify notification and ledger correction."
+    }
+  ]
+}

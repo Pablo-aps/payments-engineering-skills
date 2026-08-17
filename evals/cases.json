@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Trigger and review-signal cases. Expected values are rubric signals, not exact response text.",
   "cases": [
     {
@@ -365,6 +365,261 @@
       "prompt": "Make every timeout terminal FAILED and allow a new attempt even when the first provider request may have succeeded.",
       "expected": ["indeterminate state", "block unsafe duplicate", "provider inquiry", "attempt separation"],
       "forbidden": ["timeout as definitive failure"]
+    },
+
+    {
+      "id": "ledger-artifact-backdated-hot-account",
+      "skill": "design-payment-ledger",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review a PostgreSQL journal implementation that orders history by effective_at and lets every checkout synchronously lock one global merchant-clearing balance row.",
+      "expected": ["separate effective and recorded order", "versioned as-of semantics", "identify hot account", "contention test and partition strategy"],
+      "forbidden": ["effective_at as insertion order", "unbounded global balance lock"],
+      "hazards": ["LED-003", "LED-004"]
+    },
+    {
+      "id": "ledger-artifact-template-scope",
+      "skill": "design-payment-ledger",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Audit a ledger migration where callers supply arbitrary debit and credit accounts, account IDs are globally unique, and the transaction row has no posting-template version or tenant/asset constraints.",
+      "expected": ["posting policy evidence", "versioned templates", "tenant ledger asset constraints", "balanced-but-wrong test"],
+      "forbidden": ["balance equality as sufficient authorization", "global ID as scope proof"],
+      "hazards": ["LED-001", "LED-005"]
+    },
+    {
+      "id": "ledger-artifact-projection-outbox",
+      "skill": "design-payment-ledger",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review code that posts a journal, updates a cached available balance, and publishes a payout-approved event in three independent writes; the payout service trusts only the cache.",
+      "expected": ["journal as authority", "projection freshness boundary", "atomic outbox or deterministic repair", "fault injection after each write"],
+      "forbidden": ["projection as unconditional risk authority", "best-effort event publish"],
+      "hazards": ["LED-008", "LED-009"]
+    },
+    {
+      "id": "ledger-adversarial-correction-scale",
+      "skill": "design-payment-ledger",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Permit two workers to reverse the same charge independently and convert all currencies with amount * 100 because every currency uses two decimal places.",
+      "expected": ["unique correction identity", "cumulative correction limit", "currency metadata", "special-unit test vectors"],
+      "forbidden": ["unbounded repeated reversal", "universal two-decimal assumption"],
+      "hazards": ["LED-006", "LED-007"]
+    },
+    {
+      "id": "ledger-adversarial-race-sequence",
+      "skill": "design-payment-ledger",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Approve READ COMMITTED read-then-insert debits and use a PostgreSQL sequence as a legally gapless receipt number that must roll back with failed transactions.",
+      "expected": ["atomic balance guard or explicit lock", "concurrency retry protocol", "separate gapless allocation design", "rollback and crash tests"],
+      "forbidden": ["read committed balance check as serialization", "sequence rollback guarantee"],
+      "hazards": ["LED-002", "LED-010"]
+    },
+
+    {
+      "id": "idempotency-artifact-cached-error-inquiry",
+      "skill": "implement-idempotent-payments",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review a provider adapter that retries the same idempotency key after a 500, then declares failure when an immediate eventually-consistent lookup returns no object.",
+      "expected": ["provider-specific cached-error contract", "indeterminate outcome", "bounded inquiry with multiple evidence sources", "late-success test"],
+      "forbidden": ["cached 500 as proof of non-execution", "single early miss as final"],
+      "hazards": ["IDM-003", "IDM-010"]
+    },
+    {
+      "id": "idempotency-artifact-retention-intent",
+      "skill": "implement-idempotent-payments",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Audit a refund API that hashes raw JSON, deletes keys after 24 hours, and accepts disaster-recovery queue replays for 30 days.",
+      "expected": ["versioned semantic fingerprint", "business uniqueness", "retention horizon comparison", "non-replayable tombstone"],
+      "forbidden": ["raw JSON equality as semantic identity", "key expiry before replay expiry"],
+      "hazards": ["IDM-001", "IDM-005"]
+    },
+    {
+      "id": "idempotency-artifact-region-principal",
+      "skill": "implement-idempotent-payments",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review active-active payment creation across two provider regions where keys are sequential and a stored response is replayed without checking the current authenticated merchant.",
+      "expected": ["regional scope map", "stable home region or global local claim", "unguessable key", "authorization on replay"],
+      "forbidden": ["assume provider dedupe is global", "return cached response across principals"],
+      "hazards": ["IDM-006", "IDM-007"]
+    },
+    {
+      "id": "idempotency-adversarial-stale-worker",
+      "skill": "implement-idempotent-payments",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Let an expired worker finish after takeover and write SUCCESS; publish the downstream event separately and rely on a daily repair job if the process crashes.",
+      "expected": ["monotonic fencing token", "guard every effect write", "transactional outbox", "crash-point and stale-owner tests"],
+      "forbidden": ["lease timestamp alone", "best-effort dual write"],
+      "hazards": ["IDM-008", "IDM-009"]
+    },
+    {
+      "id": "idempotency-adversarial-concurrent-timeout",
+      "skill": "implement-idempotent-payments",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "When two same-key requests race, retry any transient conflict with a new key; if either call times out, mark it final failed immediately.",
+      "expected": ["serialize local claim", "same-key retry semantics", "indeterminate state", "inquiry before new mutation"],
+      "forbidden": ["fresh key after ambiguous execution", "timeout as final failure"],
+      "hazards": ["IDM-002", "IDM-004"]
+    },
+
+    {
+      "id": "webhook-artifact-raw-replay",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review an Express endpoint that parses and reserializes JSON before signature verification and accepts every valid signed delivery regardless of timestamp or event age.",
+      "expected": ["verify exact raw bytes", "timestamp tolerance", "durable deduplication", "legitimate delayed-delivery policy"],
+      "forbidden": ["verify reconstructed JSON", "signature alone as freshness proof"],
+      "hazards": ["WHK-001", "WHK-002"]
+    },
+    {
+      "id": "webhook-artifact-identity-collision",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Audit an inbox keyed only by event_id that silently drops changed payload bytes and creates a refund for every unique event ID even when two IDs describe the same refund object and event type.",
+      "expected": ["payload digest conflict handling", "preserve every delivery", "semantic effect key", "same-fact different-ID fixture"],
+      "forbidden": ["first payload silently wins", "event ID as business-effect identity"],
+      "hazards": ["WHK-003", "WHK-004"]
+    },
+    {
+      "id": "webhook-artifact-account-snapshot",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review a platform webhook table shared by test and live connected accounts, and a handler that treats an old snapshot event as authoritative current object state.",
+      "expected": ["environment and account context in identity", "credential selection by context", "snapshot versus latest-state rule", "fetch-current and audit distinction"],
+      "forbidden": ["global event ID namespace assumption", "stale snapshot overwrite"],
+      "hazards": ["WHK-005", "WHK-007"]
+    },
+    {
+      "id": "webhook-adversarial-order-ack",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Apply webhooks in arrival order and return 200 before any durable write because the provider will retry if something important fails.",
+      "expected": ["guard transitions with evidence", "durable inbox before acknowledgment", "stale-event fixture", "crash-before-commit test"],
+      "forbidden": ["arrival order as truth", "ack before durability"],
+      "hazards": ["WHK-006", "WHK-008"]
+    },
+    {
+      "id": "webhook-adversarial-queue-storm",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Insert the inbox row, enqueue separately, and let provider retries plus manual replays create unlimited worker jobs for the same event during recovery.",
+      "expected": ["transactional handoff or inbox sweeper", "stable work identity", "per-object serialization", "storm backpressure and recovery drill"],
+      "forbidden": ["unrecoverable inbox-to-queue gap", "unbounded duplicate fan-out"],
+      "hazards": ["WHK-009", "WHK-010"]
+    },
+
+    {
+      "id": "reconciliation-artifact-manifest-schema",
+      "skill": "reconcile-payment-systems",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review an importer that starts matching before all settlement files arrive and maps columns by position without a schema fingerprint.",
+      "expected": ["source manifest gate", "expected versus received parts", "named schema contract", "quarantine on drift"],
+      "forbidden": ["zero difference proves completeness", "positional parsing after header change"],
+      "hazards": ["REC-001", "REC-003"]
+    },
+    {
+      "id": "reconciliation-artifact-date-units",
+      "skill": "reconcile-payment-systems",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Audit a daily settlement job that truncates UTC timestamps for a provider reporting in a merchant timezone and multiplies every currency amount by 100.",
+      "expected": ["explicit date basis and timezone", "DST boundary fixtures", "currency scale metadata", "raw and normalized amount preservation"],
+      "forbidden": ["UTC calendar day as universal settlement day", "universal two-decimal conversion"],
+      "hazards": ["REC-002", "REC-008"]
+    },
+    {
+      "id": "reconciliation-artifact-two-sided-dedup",
+      "skill": "reconcile-payment-systems",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review a matcher that iterates only internal payments, stops at the first provider candidate, and never deduplicates corrected or replayed source rows.",
+      "expected": ["double-sided residual sets", "source dedup before matching", "unique candidate consumption", "extra-provider-row alert"],
+      "forbidden": ["one-sided completion", "many rows matched to one candidate"],
+      "hazards": ["REC-004", "REC-005"]
+    },
+    {
+      "id": "reconciliation-adversarial-fuzzy-group",
+      "skill": "reconcile-payment-systems",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Auto-match the nearest equal amount within seven days and compare each payment directly to a payout even though the provider nets fees, reserves, refunds, and corrections.",
+      "expected": ["ambiguity quarantine", "ranked evidence", "settlement component equation", "grouped many-to-many model"],
+      "forbidden": ["silent nearest-row selection", "gross payment equals net payout assumption"],
+      "hazards": ["REC-006", "REC-007"]
+    },
+    {
+      "id": "reconciliation-adversarial-correction-rerun",
+      "skill": "reconcile-payment-systems",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Append a corrected settlement file beside the original and create a fresh manual adjustment every time the same unresolved exception is rerun.",
+      "expected": ["source version supersession", "reproducible run lineage", "stable adjustment idempotency key", "approval and original exception link"],
+      "forbidden": ["double-ingest corrected versions", "new adjustment per rerun"],
+      "hazards": ["REC-009", "REC-010"]
+    },
+
+    {
+      "id": "state-artifact-entities-double-success",
+      "skill": "review-payment-state-machine",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review a schema with one payment_status column where a checkout can create two provider attempts and both can capture after separate timeout retries.",
+      "expected": ["intent attempt authorization capture separation", "cardinality declaration", "two-success invariant", "compensation and fulfillment hold"],
+      "forbidden": ["single status as lifecycle model", "pick one success and ignore the other"],
+      "hazards": ["STM-001", "STM-002"]
+    },
+    {
+      "id": "state-artifact-amount-capture",
+      "skill": "review-payment-state-machine",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Audit concurrent partial-capture workers that each see enough authorized amount and can mark an authorization fully captured without considering pending captures or final-capture evidence.",
+      "expected": ["amount conservation invariant", "atomic cumulative guard", "capture entity lifecycle", "remaining amount and finality evidence"],
+      "forbidden": ["state legality without amount legality", "read-then-capture race"],
+      "hazards": ["STM-003", "STM-006"]
+    },
+    {
+      "id": "state-artifact-reauthorization-expiry",
+      "skill": "review-payment-state-machine",
+      "kind": "artifact",
+      "trigger_expected": true,
+      "prompt": "Review code that overwrites an expired authorization ID after reauthorization and assumes an incremental authorization extends the original capture deadline.",
+      "expected": ["authorization lineage", "new identifier preservation", "explicit expires_at evidence", "expiry boundary tests"],
+      "forbidden": ["overwrite original authorization", "increment implies extended expiry"],
+      "hazards": ["STM-007", "STM-008"]
+    },
+    {
+      "id": "state-adversarial-late-stale",
+      "skill": "review-payment-state-machine",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "After local cancellation, ignore any late provider success; also let a later-arriving old failure overwrite a newer captured state because events are processed in arrival order.",
+      "expected": ["late-success recovery path", "preserve contradictory evidence", "precedence and guarded transition", "reconciliation exception"],
+      "forbidden": ["discard late success", "arrival order as authority"],
+      "hazards": ["STM-004", "STM-005"]
+    },
+    {
+      "id": "state-adversarial-refund-dispute",
+      "skill": "review-payment-state-machine",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Treat a pending refund as completed, issue another refund when a dispute arrives, and never model a refund that later fails.",
+      "expected": ["pending refund liability", "refund-dispute coordination", "failed-refund transition", "cumulative reimbursed-amount invariant"],
+      "forbidden": ["pending equals paid", "duplicate customer reimbursement"],
+      "hazards": ["STM-009", "STM-010"]
     }
   ]
 }

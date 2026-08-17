@@ -1,13 +1,25 @@
 # Payment Engineering Skills
 
-Production-minded skills for AI coding agents working on payment systems.
+Failure-mode-driven skills for AI coding agents working on payment systems.
 
 [![CI](https://github.com/Pablo-aps/payments-engineering-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/Pablo-aps/payments-engineering-skills/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Most payment bugs do not live in the happy path. They appear when a response is lost after money moved, two workers race for the same operation, a webhook arrives twice or out of order, or two systems disagree at close.
 
-This repository gives coding agents concrete workflows, failure tests, review rules, and adaptable contracts for those cases. The skills are vendor-aware but vendor-neutral by design. They do not replace an accountable engineering, accounting, security, or legal review.
+This repository gives coding agents concrete workflows, hazard catalogs, failure tests, review rules, and adaptable contracts for those cases. The skills are vendor-aware but vendor-neutral by design. They do not replace an accountable engineering, accounting, security, or legal review.
+
+## Why this is different
+
+Each skill starts with a source-backed hazard pass. The agent must classify every hazard and provide code- or design-specific evidence for prevention, detection, recovery, and testing. Critical risks cannot disappear behind a generic recommendation.
+
+The current catalogs cover 50 failure mechanisms, including cases that are easy to miss in ordinary reviews:
+
+- provider idempotency that is scoped by region, expires before a disaster replay, caches a server error, or exposes a stored response across credentials;
+- a valid webhook replay, the same event ID with changed bytes, two event IDs for one financial fact, and an inbox commit followed by queue loss;
+- a balanced journal entry posted to the wrong owner, backdated effective time, double reversal, hot-account contention, and stale projections used for spend decisions;
+- settlement reports that are numerically balanced but incomplete, corrected source versions, schema drift, ambiguous matches, and duplicate adjustments on rerun;
+- two payment attempts that both succeed, reauthorization under a new ID, capture races, late success after cancellation, and refund/dispute double reimbursement.
 
 ## Skills
 
@@ -22,6 +34,7 @@ This repository gives coding agents concrete workflows, failure tests, review ru
 Each directory follows the open [Agent Skills](https://agentskills.io/) format and includes:
 
 - a focused `SKILL.md` with trigger metadata and an engineering workflow;
+- a machine-readable catalog of source-backed hazards;
 - primary-source references and explicit failure modes;
 - an adaptable SQL or YAML contract;
 - interface metadata for compatible agents.
@@ -79,7 +92,7 @@ The skills push an agent to return reviewable artifacts instead of generic advic
 - separated authorization, capture, settlement, refund, dispute, and fulfillment state;
 - concurrency and failure tests, including duplicate and reordered delivery.
 
-The [`evals`](evals/cases.json) directory contains positive, negative, and adversarial prompts with expected review signals. CI validates the skill format, local references, metadata, and evaluation coverage.
+The [`evals`](evals/cases.json) directory contains 65 positive, negative, adversarial, and artifact-review prompts with expected signals. Every cataloged hazard is mapped to at least one eval. The [`fixtures`](fixtures/failure-scenarios.json) directory adds 20 deterministic implementation scenarios. CI fails if a skill loses its catalog, a hazard loses eval coverage, a fixture points to the wrong skill, required metadata drifts, or a PostgreSQL contract violates its executable invariants.
 
 ## Repository layout
 
@@ -88,19 +101,20 @@ skills/       Agent Skills and their supporting resources
 evals/        Trigger and failure-mode evaluation cases
 fixtures/     Deterministic payment-system scenarios
 scripts/      Dependency-free repository validation
-test/         Validator and fixture tests
+test/         Repository, fixture, and PostgreSQL contract tests
 ```
 
 ## Design principles
 
 1. Money movement is a distributed-systems problem with accounting consequences.
 2. Exactly-once delivery is not assumed across independent systems.
-3. A timeout is not proof that a payment failed.
+3. A timeout or early not-found is not proof that a payment failed.
 4. A provider object is not an internal ledger.
 5. Webhooks are authenticated observations, not ordered commands.
 6. Aggregate equality is not item-level reconciliation.
 7. Corrections preserve history through reversals and adjustments.
 8. Fulfillment uses explicit, rail-specific evidence.
+9. Every critical hazard needs prevention, detection, recovery, and a failure test.
 
 ## Validate locally
 

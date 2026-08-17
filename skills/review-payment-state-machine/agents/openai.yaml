@@ -1,4 +1,4 @@
 interface:
   display_name: "Payment State Machine Review"
   short_description: "Review payment lifecycles and transitions"
-  default_prompt: "Use $review-payment-state-machine to review this payment lifecycle and its transition rules."
+  default_prompt: "Use $review-payment-state-machine to run the hazard pass, then review entity boundaries, amount invariants, evidence, and transitions."

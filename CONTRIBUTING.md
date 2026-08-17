@@ -6,9 +6,11 @@ Contributions that make payment engineering more explicit, testable, and accurat
 
 1. Open an issue for a new skill or a material change in scope.
 2. Prefer primary sources: provider documentation, protocol specifications, database documentation, or accounting standards.
-3. Describe the invariant or failure mode the change addresses.
-4. Add or update positive, negative, and adversarial evaluation cases.
-5. Run `npm test` with Node.js 20 or newer.
+3. Describe the invariant or failure mechanism the change addresses.
+4. Add or update its catalog record with concrete evidence, prevention, detection, recovery, and a failure test.
+5. Link every new hazard ID from an artifact or adversarial evaluation case and, where practical, a deterministic fixture.
+6. Add or update positive and negative trigger cases when activation behavior changes.
+7. Run `npm test` with Node.js 20 or newer.
 
 ## Skill standard
 
@@ -19,6 +21,8 @@ A skill must:
 - distinguish known failure from an indeterminate external outcome;
 - name transaction, trust, and authority boundaries;
 - include concurrency, retry, and delayed-delivery cases where relevant;
+- keep at least ten high-value hazards in `references/hazard-catalog.json` and avoid splitting one mechanism into filler variants;
+- give every applicable critical hazard a preventive control, detection signal, recovery path, and executable or deterministic test;
 - avoid presenting sample schemas as production-ready;
 - keep references close to primary documentation;
 - use plain English and explain provider-specific assumptions.

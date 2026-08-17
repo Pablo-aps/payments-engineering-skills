@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "skill": "reconcile-payment-systems",
+  "sources": [
+    "https://docs.stripe.com/reports/select-a-report",
+    "https://docs.stripe.com/reports/payout-reconciliation",
+    "https://docs.stripe.com/reports/balance-transaction-types",
+    "https://docs.adyen.com/reporting/settlement-reconciliation/transaction-level/settlement-details-report",
+    "https://developer.paypal.com/docs/reports/sftp-reports/settlement-report/"
+  ],
+  "hazards": [
+    {
+      "id": "REC-001",
+      "severity": "critical",
+      "mechanism": "A missing page or file is invisible because the incomplete subset happens to have a zero aggregate difference.",
+      "evidence": "Verify report readiness, expected file count/sequence, page cursors, row count, checksums, and provider control totals before matching.",
+      "control": "Fail the run as INCOMPLETE until the immutable source manifest proves the population is complete.",
+      "detection": "Track gaps, duplicate sequence numbers, cursor loops, checksum changes, and manifest/control-total mismatches.",
+      "recovery": "Reacquire the missing source under the same snapshot or start a new versioned run.",
+      "test": "Remove the middle file from a three-file report while keeping compared aggregates equal."
+    },
+    {
+      "id": "REC-002",
+      "severity": "high",
+      "mechanism": "Systems compare different date meanings or timezones, especially across DST, and misclassify valid late or early records.",
+      "evidence": "Name created, authorized, captured, available, settled, payout, and bank-booking dates plus timezone and cutoff for each source.",
+      "control": "Select one documented date basis per control and normalize instants without discarding original local timestamps.",
+      "detection": "Break out boundary exceptions by hour, timezone offset, and DST transition.",
+      "recovery": "Re-run affected windows with corrected date mapping and preserve the superseded result.",
+      "test": "Cover a DST fallback hour, month close, and a transaction captured before midnight but settled after it."
+    },
+    {
+      "id": "REC-003",
+      "severity": "critical",
+      "mechanism": "A provider adds, reorders, removes, or reconfigures report columns and the parser silently shifts monetary fields.",
+      "evidence": "Capture schema/report version, exact header order, required columns, type rules, and normalized mapping version.",
+      "control": "Validate headers and schema fingerprints before ingestion; quarantine unknown or missing fields.",
+      "detection": "Alert on schema hash changes, parse coercions, new journal types, and unexpected null-rate shifts.",
+      "recovery": "Stop the run, version the parser, reingest raw files, and compare both normalized outputs.",
+      "test": "Reorder fee/net columns and add an unknown journal type without changing the file name."
+    },
+    {
+      "id": "REC-004",
+      "severity": "critical",
+      "mechanism": "Only internal-to-provider matching runs, so extra provider records or duplicate external effects remain invisible.",
+      "evidence": "Inspect population counts and value coverage independently from both A-to-B and B-to-A directions.",
+      "control": "Run double-sided matching and require every in-scope source record to end matched, explicitly excluded, or exceptional.",
+      "detection": "Publish unmatched counts/value by source side and reason, never one blended percentage.",
+      "recovery": "Classify the extra side, add missing internal evidence or reverse an unintended external movement.",
+      "test": "Add a provider transaction with no internal request while every internal request still has a provider match."
+    },
+    {
+      "id": "REC-005",
+      "severity": "high",
+      "mechanism": "Duplicate source rows enter matching and make a valid one-to-one record look one-to-many or inflate totals.",
+      "evidence": "Define source-record identity, file/version lineage, duplicate rules, and whether corrections reuse identifiers.",
+      "control": "Deduplicate within an immutable staging layer before matching and quarantine conflicting duplicates.",
+      "detection": "Count exact and conflicting duplicates by source identity and digest.",
+      "recovery": "Exclude only by a recorded rule, preserve all raw rows, and rerun matches from staging.",
+      "test": "Repeat an exact row and then repeat its ID with a changed amount."
+    },
+    {
+      "id": "REC-006",
+      "severity": "critical",
+      "mechanism": "Amount-and-date matching chooses the wrong record when common values repeat or references are reused.",
+      "evidence": "Measure candidate cardinality and the uniqueness of every composite rule over historical data.",
+      "control": "Prefer stable financial IDs; classify any multi-candidate composite as AMBIGUOUS instead of picking nearest.",
+      "detection": "Track candidates per match and rule-specific collision rates.",
+      "recovery": "Undo the match decision without deleting evidence and resolve through stronger references or review.",
+      "test": "Create two same-day, same-amount payments with a reused merchant reference."
+    },
+    {
+      "id": "REC-007",
+      "severity": "high",
+      "mechanism": "Fees, reserves, FX, refunds, chargebacks, and multiple captures are forced into one-to-one matches.",
+      "evidence": "Map provider journal types and grouping identities to gross, fee, reserve, conversion, and net equations.",
+      "control": "Support explicit one-to-many and many-to-one match groups with equation checks by asset.",
+      "detection": "Report unmatched components and group equation residuals rather than hiding them in tolerance.",
+      "recovery": "Reclassify the match cardinality, rebuild the group, and link any required ledger adjustment.",
+      "test": "Match one payout containing captures, two refunds, a reserve adjustment, and fees."
+    },
+    {
+      "id": "REC-008",
+      "severity": "critical",
+      "mechanism": "One source uses major units, another atomic units, or presentment and settlement currencies are compared as if identical.",
+      "evidence": "Record source amount unit, scale version, gross currency, net/settlement currency, FX rate, and rounding component.",
+      "control": "Normalize with a versioned asset registry and keep source amounts; compare only same-asset equations.",
+      "detection": "Alert on 10x/100x/1,000,000x residual patterns and currency-pair mismatches.",
+      "recovery": "Correct the normalization version and rerun from immutable raw sources; do not edit matches manually.",
+      "test": "Mix major-unit CSV amounts, atomic-unit API amounts, zero-decimal currency, and FX settlement."
+    },
+    {
+      "id": "REC-009",
+      "severity": "high",
+      "mechanism": "A corrected or regenerated report is ingested as an additional population and double-counts the period.",
+      "evidence": "Capture report identity, sequence, version, generation time, replacement semantics, and file digest.",
+      "control": "Model report versions and supersession explicitly; never identify a source only by date.",
+      "detection": "Alert when two source versions cover the same scope without a declared replacement relationship.",
+      "recovery": "Supersede the old source in a new immutable run and reverse any adjustment caused solely by the old version.",
+      "test": "Ingest version 002 after version 001 for the same settlement date and file sequence."
+    },
+    {
+      "id": "REC-010",
+      "severity": "critical",
+      "mechanism": "Re-running a resolved exception posts the same financial adjustment again.",
+      "evidence": "Trace exception identity, resolution decision, approval, adjustment operation key, ledger transaction, and verifying run.",
+      "control": "Use a stable adjustment key derived from exception plus resolution version and post through the normal idempotent ledger path.",
+      "detection": "Enforce unique adjustment keys and reconcile resolved exceptions to exactly one intended correction set.",
+      "recovery": "Reverse the duplicate adjustment and link it to both the incident and original exception.",
+      "test": "Replay the same run and resolution concurrently and require a single adjustment."
+    }
+  ]
+}

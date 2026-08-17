@@ -1,11 +1,21 @@
 ---
 name: build-reliable-payment-webhooks
-description: Design, implement, debug, or review secure and durable payment-provider webhook ingestion. Use for signature verification, raw-body handling, inbox tables, duplicate delivery, out-of-order events, asynchronous processing, retries, replay protection, poison events, event versioning, and idempotent payment side effects.
+description: Design, implement, debug, or review secure and durable payment-provider webhook ingestion. Use for raw-body signature verification, replay and secret rotation, account/environment scoping, same-ID and semantic duplicates, out-of-order events, snapshot versus thin events, durable inbox and queue gaps, retry storms, poison events, schema versioning, or idempotent financial and fulfillment effects.
 ---
 
 # Build Reliable Payment Webhooks
 
 Treat webhooks as untrusted, at-least-once, potentially reordered facts delivered over an unreliable network. Authenticate, persist, acknowledge, and process them as separate stages.
+
+## Run the hazard pass first
+
+Read [references/hazard-catalog.json](references/hazard-catalog.json). Build a matrix with:
+
+```text
+hazard_id | applicable | concrete evidence | prevention | detection | recovery | test
+```
+
+Mark a hazard not applicable only with provider- and endpoint-specific evidence. Do not approve an endpoint while an applicable critical hazard lacks a preventive control, detection signal, recovery owner, and failure test.
 
 ## Workflow
 
@@ -19,7 +29,10 @@ Record the provider's:
 - retry schedule and acknowledgement deadline;
 - ordering guarantees or lack of them;
 - API/event version behavior;
-- redelivery and manual replay mechanisms.
+- redelivery and manual replay mechanisms;
+- environment, app, provider account, connected-account, or organization context;
+- whether events are point-in-time snapshots, thin notifications, or mutable resource pointers;
+- whether separate event IDs can represent the same semantic transition.
 
 Do not generalize one provider's guarantees to another.
 
@@ -41,6 +54,8 @@ Within a short database transaction:
 
 Use [assets/postgres-webhook-inbox.sql](assets/postgres-webhook-inbox.sql) as a starting point.
 
+Namespace identity with provider, environment, account/context, endpoint, and event ID. When an existing identity arrives again, compare its raw payload digest. Quarantine a digest mismatch; it is not an ordinary duplicate.
+
 Do not perform slow fulfillment, email, transfers, or broad domain workflows before acknowledgement.
 
 ### 4. Process idempotently
@@ -50,6 +65,10 @@ Make the worker claim events with explicit concurrency control. Apply provider f
 Read [references/processing-model.md](references/processing-model.md) for duplicate, ordering, retry, and poison-event handling.
 
 When order matters, compare provider sequence/version information or retrieve current provider state. Do not depend on arrival order. Ignore stale transitions only when the monotonic rule is explicit; otherwise send them to reconciliation.
+
+Choose snapshot versus current-resource semantics per effect. Fetch current provider state for a current-state decision; preserve the immutable event/change data when the historical transition is the required evidence.
+
+Treat queue publication as a wake-up, not the only record of work. Sweep durable ready rows so an inbox commit followed by a queue failure cannot strand an accepted event.
 
 ### 5. Preserve evidence
 
@@ -79,11 +98,18 @@ Cover:
 - worker crash after the side effect but before marking success;
 - permanently malformed or unsupported events;
 - event schema version changes;
-- manual replay after the original event was processed.
+- manual replay after the original event was processed;
+- the same event identity with a different validly signed payload;
+- separate event IDs for one capture or refund;
+- identical IDs under two provider accounts or test/live environments;
+- object state changing between snapshot creation and worker execution;
+- inbox commit followed by failed queue publication;
+- overlapping automatic retry and manual replay of a poison event;
+- secret rotation with deliveries signed by both active key versions.
 
 ## Required output
 
-Return the HTTP boundary, signature logic, inbox schema, acknowledgement behavior, worker state machine, deduplication strategy, ordering policy, poison-event path, observability fields, and executable failure tests.
+Return the HTTP boundary, signature logic, identity namespace, inbox and delivery-attempt schema, acknowledgement behavior, worker state machine, delivery and semantic deduplication strategies, ordering/snapshot policy, poison-event path, replay/backpressure controls, observability fields, completed hazard matrix, and executable failure tests.
 
 ## Review rules
 
@@ -96,4 +122,9 @@ Reject or flag designs that:
 - assume events arrive once or in order;
 - use only object status without guarding stale updates;
 - log webhook secrets or full sensitive payloads;
-- retry every error forever without a quarantine path.
+- retry every error forever without a quarantine path;
+- deduplicate only by event ID when the provider can emit distinct events for one semantic fact;
+- omit provider account/context or environment from identity and authorization;
+- treat a conflicting payload digest as a harmless duplicate;
+- rely on queue depth without monitoring durable inbox age;
+- use snapshot data and latest resource state interchangeably.

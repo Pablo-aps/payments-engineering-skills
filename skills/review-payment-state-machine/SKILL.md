@@ -1,11 +1,21 @@
 ---
 name: review-payment-state-machine
-description: Design or review payment lifecycle models and transition logic for authorizations, captures, asynchronous payments, settlement, refunds, reversals, disputes, and fulfillment. Use when payment statuses are conflated, provider callbacks arrive late or out of order, partial operations are possible, retries create multiple attempts, or order fulfillment depends on payment evidence.
+description: Design, debug, or review payment lifecycle models and transition logic for authorizations, captures, asynchronous methods, settlement, refunds, reversals, disputes, and fulfillment. Use for conflated statuses, multiple or late-success attempts, cumulative amount races, partial/final captures, authorization expiry or reauthorization, incremental authorization, stale facts, pending-refund/dispute races, refund failure, or evidence-based fulfillment.
 ---
 
 # Review Payment State Machine
 
 Model payment behavior as related state machines with explicit evidence and transition guards. Prevent a single overloaded `payment_status` from deciding accounting, settlement, and fulfillment.
+
+## Run the hazard pass first
+
+Read [references/hazard-catalog.json](references/hazard-catalog.json). Build a matrix with:
+
+```text
+hazard_id | applicable | concrete evidence | prevention | detection | recovery | test
+```
+
+Mark a hazard not applicable only with rail- and product-specific evidence. Do not approve a lifecycle while an applicable critical hazard lacks a preventive control, detection signal, compensation/recovery owner, and transition test.
 
 ## Workflow
 
@@ -45,11 +55,17 @@ For each state, specify:
 
 Do not define states only as renamed provider strings. Map provider states into internal semantics.
 
+Define amount dimensions independently from status: intended, authorized, capturable, captured, refundable, refunded, disputed, settled, and paid out. A legal state transition is still invalid when cumulative child amounts violate the parent cap.
+
 ### 3. Build a guarded transition table
 
 Use [assets/payment-state-machine.yaml](assets/payment-state-machine.yaml) as a starting contract. Include idempotency key, source event, observed time, effective provider time, prior state, next state, and transition reason.
 
 Make transitions monotonic where the domain allows. Define explicit compensating transitions for void, reversal, refund, and chargeback. Route invalid or stale transitions to an audit/reconciliation path instead of silently overwriting state.
+
+Use optimistic versioning or locks for state-plus-amount changes. Model a late success for a canceled, expired, or losing attempt as new evidence requiring compensation; never discard it because the local summary looked terminal.
+
+Treat reauthorization as a new authorization identity linked to the old one. Track amount and expiry separately: an incremental authorization does not imply that the capture deadline moved.
 
 ### 4. Define fulfillment gates
 
@@ -74,11 +90,18 @@ Cover:
 - duplicate event and command delivery;
 - expiration or void of an uncaptured authorization;
 - new attempt after a definitive decline;
-- indeterminate provider outcome.
+- indeterminate provider outcome;
+- two provider attempts succeeding for one commercial intent;
+- concurrent partial captures or refunds that exceed the cumulative cap;
+- late capture after local cancellation or a losing-attempt decision;
+- reauthorization followed by capture against the old authorization ID;
+- incremental authorization without expiry extension;
+- a dispute opening while a refund is pending;
+- refund moving from pending to failed after customer notification.
 
 ## Required output
 
-Return entity boundaries, state definitions, a transition table, command guards, evidence requirements, fulfillment rules, ledger-event mapping, invalid-transition behavior, and tests for happy, partial, delayed, and reversed flows.
+Return entity boundaries and cardinalities, state definitions, amount-conservation equations, a guarded transition table, command identities, evidence precedence, fulfillment policy version, ledger-event mapping, compensation behavior, completed hazard matrix, and tests for happy, partial, concurrent, delayed, duplicated, and reversed flows.
 
 ## Review rules
 
@@ -92,4 +115,9 @@ Reject or flag designs that:
 - exclude partial captures, refunds, or multiple attempts;
 - mutate state without recording source and prior value;
 - retry indeterminate mutations blindly;
-- claim universal finality without naming the rail and evidence.
+- claim universal finality without naming the rail and evidence;
+- enforce state guards without cumulative amount guards;
+- assume one successful attempt per order without detecting excess captured totals;
+- overwrite an old authorization when reauthorization returns a new identity;
+- assume an amount increment extends authorization expiry;
+- treat refund request acceptance as final customer reimbursement.

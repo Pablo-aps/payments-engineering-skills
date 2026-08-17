@@ -5,6 +5,20 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const skillRoot = path.join(root, "skills");
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const hazardPrefixes = new Map([
+  ["build-reliable-payment-webhooks", "WHK"],
+  ["design-payment-ledger", "LED"],
+  ["implement-idempotent-payments", "IDM"],
+  ["reconcile-payment-systems", "REC"],
+  ["review-payment-state-machine", "STM"],
+]);
+const hazardFields = ["id", "severity", "mechanism", "evidence", "control", "detection", "recovery", "test"];
+const severities = new Set(["critical", "high", "medium", "low"]);
+const evaluationKinds = new Set(["positive", "negative", "adversarial", "artifact"]);
+
+function isNonEmpty(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
 
 export async function validateRepository() {
   const errors = [];
@@ -13,8 +27,13 @@ export async function validateRepository() {
     .map((entry) => entry.name)
     .sort();
 
+  const packageManifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  const releaseVersion = packageManifest.version;
   const index = JSON.parse(await readFile(path.join(root, "skills.json"), "utf8"));
+  if (index.version !== releaseVersion) errors.push("skills.json version must match package.json");
   const indexed = new Map(index.skills.map((skill) => [skill.name, skill]));
+  const hazardsById = new Map();
+  const hazardIdsBySkill = new Map();
 
   for (const directory of directories) {
     const skillDirectory = path.join(skillRoot, directory);
@@ -92,6 +111,56 @@ export async function validateRepository() {
     if (!entry || entry.path !== `skills/${directory}`) {
       errors.push(`${directory}: missing or incorrect skills.json entry`);
     }
+
+    const catalogPath = path.join(skillDirectory, "references", "hazard-catalog.json");
+    try {
+      const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
+      const expectedPrefix = hazardPrefixes.get(directory);
+      if (catalog.version !== 1) errors.push(`${directory}: hazard catalog version must be 1`);
+      if (catalog.skill !== directory) errors.push(`${directory}: hazard catalog skill does not match directory`);
+      if (!Array.isArray(catalog.sources) || catalog.sources.length < 3) {
+        errors.push(`${directory}: hazard catalog needs at least 3 primary-source URLs`);
+      } else {
+        if (new Set(catalog.sources).size !== catalog.sources.length) {
+          errors.push(`${directory}: hazard catalog contains duplicate source URLs`);
+        }
+        for (const sourceUrl of catalog.sources) {
+          if (!isNonEmpty(sourceUrl) || !sourceUrl.startsWith("https://")) {
+            errors.push(`${directory}: invalid hazard source URL ${String(sourceUrl)}`);
+          }
+        }
+      }
+      if (!Array.isArray(catalog.hazards) || catalog.hazards.length < 10) {
+        errors.push(`${directory}: hazard catalog must contain at least 10 hazards`);
+      }
+
+      const localHazardIds = new Set();
+      for (const hazard of catalog.hazards ?? []) {
+        for (const field of hazardFields) {
+          if (!isNonEmpty(hazard[field])) errors.push(`${directory}: hazard ${hazard.id ?? "unknown"} missing ${field}`);
+        }
+        if (!severities.has(hazard.severity)) {
+          errors.push(`${directory}: hazard ${hazard.id ?? "unknown"} has invalid severity`);
+        }
+        if (!new RegExp(`^${expectedPrefix}-\\d{3}$`).test(hazard.id ?? "")) {
+          errors.push(`${directory}: invalid hazard ID ${hazard.id ?? "unknown"}`);
+        }
+        if (localHazardIds.has(hazard.id) || hazardsById.has(hazard.id)) {
+          errors.push(`${directory}: duplicate hazard ID ${hazard.id}`);
+        }
+        localHazardIds.add(hazard.id);
+        hazardsById.set(hazard.id, directory);
+      }
+      if (expectedPrefix) {
+        for (let number = 1; number <= 10; number += 1) {
+          const expectedId = `${expectedPrefix}-${String(number).padStart(3, "0")}`;
+          if (!localHazardIds.has(expectedId)) errors.push(`${directory}: missing hazard ID ${expectedId}`);
+        }
+      }
+      hazardIdsBySkill.set(directory, localHazardIds);
+    } catch (error) {
+      errors.push(`${directory}: invalid or missing hazard catalog (${error.message})`);
+    }
   }
 
   for (const indexedName of indexed.keys()) {
@@ -101,8 +170,37 @@ export async function validateRepository() {
   }
 
   const evaluations = JSON.parse(await readFile(path.join(root, "evals", "cases.json"), "utf8"));
+  if (evaluations.version !== releaseVersion) errors.push("evals/cases.json version must match package.json");
+  const coveredHazards = new Set();
+  for (const testCase of evaluations.cases) {
+    for (const field of ["id", "skill", "kind", "prompt"]) {
+      if (!isNonEmpty(testCase[field])) errors.push(`eval ${testCase.id ?? "unknown"}: missing ${field}`);
+    }
+    if (!directories.includes(testCase.skill)) errors.push(`eval ${testCase.id}: unknown skill ${testCase.skill}`);
+    if (!evaluationKinds.has(testCase.kind)) errors.push(`eval ${testCase.id}: invalid kind ${testCase.kind}`);
+    if (typeof testCase.trigger_expected !== "boolean") {
+      errors.push(`eval ${testCase.id}: trigger_expected must be boolean`);
+    } else if ((testCase.kind === "negative") === testCase.trigger_expected) {
+      errors.push(`eval ${testCase.id}: trigger expectation conflicts with kind ${testCase.kind}`);
+    }
+    for (const field of ["expected", "forbidden"]) {
+      if (!Array.isArray(testCase[field]) || testCase[field].length === 0 || !testCase[field].every(isNonEmpty)) {
+        errors.push(`eval ${testCase.id}: ${field} must be a non-empty string array`);
+      }
+    }
+    for (const hazardId of testCase.hazards ?? []) {
+      if (!hazardsById.has(hazardId)) {
+        errors.push(`eval ${testCase.id}: unknown hazard ${hazardId}`);
+      } else if (hazardsById.get(hazardId) !== testCase.skill) {
+        errors.push(`eval ${testCase.id}: hazard ${hazardId} belongs to another skill`);
+      } else {
+        coveredHazards.add(hazardId);
+      }
+    }
+  }
+
   for (const directory of directories) {
-    for (const [kind, minimum] of [["positive", 3], ["negative", 2], ["adversarial", 3]]) {
+    for (const [kind, minimum] of [["positive", 3], ["negative", 2], ["adversarial", 5], ["artifact", 3]]) {
       const count = evaluations.cases.filter(
         (testCase) => testCase.skill === directory && testCase.kind === kind,
       ).length;
@@ -110,14 +208,51 @@ export async function validateRepository() {
         errors.push(`${directory}: needs at least ${minimum} ${kind} eval cases; found ${count}`);
       }
     }
+    for (const hazardId of hazardIdsBySkill.get(directory) ?? []) {
+      if (!coveredHazards.has(hazardId)) errors.push(`${directory}: hazard ${hazardId} is not covered by an eval`);
+    }
   }
 
-  const ids = evaluations.cases.map((testCase) => testCase.id);
-  if (new Set(ids).size !== ids.length) {
+  const evaluationIds = evaluations.cases.map((testCase) => testCase.id);
+  if (new Set(evaluationIds).size !== evaluationIds.length) {
     errors.push("evals/cases.json contains duplicate IDs");
   }
 
-  return { errors, skillCount: directories.length, evaluationCount: evaluations.cases.length };
+  const fixture = JSON.parse(await readFile(path.join(root, "fixtures", "failure-scenarios.json"), "utf8"));
+  if (fixture.version !== releaseVersion) errors.push("fixtures/failure-scenarios.json version must match package.json");
+  const fixtureIds = new Set();
+  for (const scenario of fixture.scenarios) {
+    if (!isNonEmpty(scenario.id) || fixtureIds.has(scenario.id)) {
+      errors.push(`fixture has missing or duplicate ID ${scenario.id ?? "unknown"}`);
+    }
+    fixtureIds.add(scenario.id);
+    if (!directories.includes(scenario.skill)) errors.push(`fixture ${scenario.id}: unknown skill ${scenario.skill}`);
+    if (!scenario.input || typeof scenario.input !== "object") errors.push(`fixture ${scenario.id}: missing input`);
+    if (!scenario.expected || typeof scenario.expected !== "object") errors.push(`fixture ${scenario.id}: missing expected outcome`);
+    if (!Array.isArray(scenario.hazards) || scenario.hazards.length === 0) {
+      errors.push(`fixture ${scenario.id}: hazards must be a non-empty array`);
+    }
+    if (new Set(scenario.hazards ?? []).size !== (scenario.hazards ?? []).length) {
+      errors.push(`fixture ${scenario.id}: hazards contain duplicates`);
+    }
+    for (const hazardId of scenario.hazards ?? []) {
+      if (hazardsById.get(hazardId) !== scenario.skill) {
+        errors.push(`fixture ${scenario.id}: invalid hazard ${hazardId}`);
+      }
+    }
+  }
+  for (const directory of directories) {
+    const count = fixture.scenarios.filter((scenario) => scenario.skill === directory).length;
+    if (count < 4) errors.push(`${directory}: needs at least 4 failure fixtures; found ${count}`);
+  }
+
+  return {
+    errors,
+    skillCount: directories.length,
+    hazardCount: hazardsById.size,
+    evaluationCount: evaluations.cases.length,
+    fixtureCount: fixture.scenarios.length,
+  };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -126,6 +261,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     for (const error of result.errors) console.error(`ERROR: ${error}`);
     process.exitCode = 1;
   } else {
-    console.log(`Validated ${result.skillCount} skills and ${result.evaluationCount} evaluation cases.`);
+    console.log(
+      `Validated ${result.skillCount} skills, ${result.hazardCount} hazards, `
+      + `${result.evaluationCount} evaluation cases, and ${result.fixtureCount} failure fixtures.`,
+    );
   }
 }

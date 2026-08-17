@@ -1,8 +1,8 @@
 {
   "name": "payments-engineering-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Production-minded Agent Skills for payment ledgers, idempotency, webhooks, reconciliation, and lifecycle design.",
+  "description": "Failure-mode-driven Agent Skills for payment ledgers, idempotency, webhooks, reconciliation, and lifecycle design.",
   "type": "module",
   "scripts": {
     "validate": "node scripts/validate-skills.mjs",

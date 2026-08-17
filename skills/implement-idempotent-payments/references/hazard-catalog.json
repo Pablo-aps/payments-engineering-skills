@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "skill": "implement-idempotent-payments",
+  "sources": [
+    "https://docs.stripe.com/api/idempotent_requests",
+    "https://docs.stripe.com/api-v2-overview",
+    "https://docs.stripe.com/error-low-level",
+    "https://docs.adyen.com/development-resources/api-idempotency",
+    "https://developer.paypal.com/api/rest/reference/idempotency/",
+    "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+    "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html"
+  ],
+  "hazards": [
+    {
+      "id": "IDM-001",
+      "severity": "critical",
+      "mechanism": "The same key is reused for a different amount, asset, destination, or operation after normalization hides the change.",
+      "evidence": "Inspect the canonical field set, default/null rules, array ordering, numeric encoding, scope, and fingerprint version.",
+      "control": "Hash semantic intent with a versioned canonicalizer and return a conflict before replaying any prior response.",
+      "detection": "Count key-fingerprint conflicts by caller and operation; investigate repeated conflicts as integration or abuse signals.",
+      "recovery": "Do not mutate the original record; require a new logical operation and key after the caller resolves intent.",
+      "test": "Reuse one key while changing only destination, defaulted fee mode, and decimal representation."
+    },
+    {
+      "id": "IDM-002",
+      "severity": "critical",
+      "mechanism": "A timeout, reset, or local crash is recorded as failure even though the provider may have applied the mutation.",
+      "evidence": "Mark the last durable local point, whether request bytes could have left, provider correlation, and available inquiry evidence.",
+      "control": "Persist the claim and downstream key first, then transition ambiguity to INDETERMINATE rather than FAILED_FINAL.",
+      "detection": "Track age and volume of indeterminate operations and compare them with late events and provider objects.",
+      "recovery": "Retry inquiry with bounded backoff, reuse the same key where supported, and escalate unresolved cases to reconciliation.",
+      "test": "Cut the connection after provider acceptance and prove no fresh-key mutation can start."
+    },
+    {
+      "id": "IDM-003",
+      "severity": "high",
+      "mechanism": "A provider stores and replays the first server error, so retrying the same key returns a cached 500 without revealing the final object state.",
+      "evidence": "Record provider API generation, error-caching contract, request ID, object correlation, and whether execution began.",
+      "control": "Separate transport retry from outcome inquiry and implement provider-specific handling for cached failures.",
+      "detection": "Detect identical status/body/request correlation across retries and compare with webhook or object inquiry evidence.",
+      "recovery": "Query authoritative object/balance state; never switch to a new key until non-execution is proven.",
+      "test": "Replay a cached 500 while a later provider event confirms success."
+    },
+    {
+      "id": "IDM-004",
+      "severity": "high",
+      "mechanism": "Two concurrent requests share a key, but the provider does not store the losing conflict response as the idempotent result.",
+      "evidence": "Inspect local claim ordering and the provider's contract for in-progress or transient duplicate requests.",
+      "control": "Serialize locally before the provider call and treat provider in-progress responses as retryable with the same key.",
+      "detection": "Measure local conflicts separately from provider transient duplicate responses.",
+      "recovery": "Wait for or take over the durable local operation under a fencing rule; do not create a parallel attempt.",
+      "test": "Send simultaneous identical requests and force the provider to return one success and one transient conflict."
+    },
+    {
+      "id": "IDM-005",
+      "severity": "critical",
+      "mechanism": "The local record or provider key expires while a queue, client, disaster replay, or manual tool can still resend the operation.",
+      "evidence": "Compare every retry/redelivery horizon with local retention, provider retention, archive, and tombstone periods.",
+      "control": "Retain a non-replayable tombstone or business-operation uniqueness longer than all late-delivery paths.",
+      "detection": "Alert on duplicate business references after key expiry and report operations arriving inside the tombstone window.",
+      "recovery": "Quarantine the late request and reconcile by business identity before permitting a new mutation.",
+      "test": "Redeliver after provider expiry and local active-record expiry but before the business tombstone expires."
+    },
+    {
+      "id": "IDM-006",
+      "severity": "critical",
+      "mechanism": "Regional failover sends the same key to endpoints whose idempotency stores do not share a global scope.",
+      "evidence": "Map provider region, merchant/company scope, DNS failover, active-active writers, and key-store replication guarantees.",
+      "control": "Route one logical operation to a stable home region or enforce global local uniqueness before regional provider calls.",
+      "detection": "Correlate the same business operation across provider regions and alert on multiple provider object IDs.",
+      "recovery": "Stop failover retries, identify all effects, reverse the unintended duplicate, and preserve incident evidence.",
+      "test": "Issue the same operation during a region switch and simulate region-local provider deduplication."
+    },
+    {
+      "id": "IDM-007",
+      "severity": "high",
+      "mechanism": "Guessable keys or overly broad scope let one credential retrieve another caller's stored response.",
+      "evidence": "Review key entropy, tenant/credential authorization on replay, response contents, and access changes since original execution.",
+      "control": "Use unguessable keys, scope records to the authenticated principal, and re-authorize access before response replay.",
+      "detection": "Alert on cross-credential key collisions, high miss/conflict rates, and sequential key probing.",
+      "recovery": "Revoke exposed credentials, redact retained responses, and audit accesses to affected operation keys.",
+      "test": "Reuse a known key through another credential in the same provider/company account and require denial."
+    },
+    {
+      "id": "IDM-008",
+      "severity": "critical",
+      "mechanism": "A slow worker resumes after its lease expired and overwrites the result produced by a takeover worker.",
+      "evidence": "Inspect lease token, fencing value, guarded updates, provider call ownership, and clock assumptions.",
+      "control": "Issue a monotonic fencing token for every takeover and require it on all state transitions and effect writes.",
+      "detection": "Record rejected stale-token writes and overlapping attempt intervals.",
+      "recovery": "Preserve both attempt traces, accept only authoritative provider evidence, and reconcile any duplicate side effect.",
+      "test": "Pause worker A past lease expiry, complete with worker B, then resume A and require every stale write to fail."
+    },
+    {
+      "id": "IDM-009",
+      "severity": "high",
+      "mechanism": "The operation commits successfully but the completion event is lost, or an event is emitted for a rolled-back operation.",
+      "evidence": "Locate operation state update, outbox insert, broker publish, acknowledgement, and consumer dedupe boundaries.",
+      "control": "Write operation result and outbox event atomically; make relay and consumers idempotent.",
+      "detection": "Reconcile terminal operations to outbox rows and outbox rows to published/consumed acknowledgements.",
+      "recovery": "Replay unpublished outbox rows without changing the payment operation result.",
+      "test": "Crash before commit, after commit, after publish, and before relay acknowledgement."
+    },
+    {
+      "id": "IDM-010",
+      "severity": "high",
+      "mechanism": "An immediate inquiry returns no object because the provider view is eventually consistent, and the system treats absence as proof of non-execution.",
+      "evidence": "Document lookup keys, consistency and indexing delay, webhook lag, and the minimum safe observation window.",
+      "control": "Keep the outcome indeterminate through a bounded evidence window and combine stable-key retry, inquiry, events, and reconciliation.",
+      "detection": "Measure late object appearance after initial not-found and tune the recovery schedule from observed tails.",
+      "recovery": "Do not recreate during the evidence window; escalate aged cases with all query history.",
+      "test": "Return not-found for early inquiries, then expose the successful provider object later."
+    }
+  ]
+}

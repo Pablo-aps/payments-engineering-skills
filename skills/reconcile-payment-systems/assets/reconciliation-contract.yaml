@@ -1,62 +1,128 @@
-version: 1
+version: 2
 control:
   id: provider-balance-to-ledger
-  objective: Every provider balance movement is represented once and accurately in the internal ledger.
+  objective: Every in-scope provider balance movement is represented once and accurately in the internal ledger, and vice versa.
   cadence: daily
-  timezone: UTC
+  scope:
+    environment: live
+    provider_accounts: [merchant_account]
+    assets: [USD]
+  period:
+    date_basis: provider_available_at
+    timezone: UTC
+    late_arrival_grace: P2D
+run_gate:
+  require_before_matching:
+    - every_source_ready
+    - source_manifest_complete
+    - schema_fingerprint_accepted
+    - control_totals_valid
 sources:
   provider_balance:
-    identity: provider_balance_transaction_id
+    identity: [provider_account_id, provider_balance_transaction_id]
     readiness: report_finalized
-    checkpoint: [report_id, page_cursor]
-    amount_unit: atomic
+    amount_unit: major_decimal
+    date_fields: [created_at, available_at]
+    checkpoint: [report_id, report_version, page_cursor]
   internal_ledger:
-    identity: ledger_entry_id
+    identity: [tenant_id, ledger_id, ledger_entry_id]
     readiness: posting_window_closed
+    amount_unit: atomic
+    date_fields: [recorded_at, effective_at, posted_at]
     checkpoint: [max_posted_at, max_entry_id]
+source_manifest:
+  immutable: true
+  required_fields:
+    - source
+    - scope
+    - report_id
+    - report_version
+    - supersedes_report_version
+    - expected_file_count
+    - received_file_sequences
+    - file_sha256
+    - schema_fingerprint
+    - row_count
+    - control_count
+    - control_amounts_by_asset
+    - retrieved_at
+  fail_codes:
+    - INCOMPLETE_SOURCE
+    - SOURCE_CHECKSUM_CHANGED
+    - SOURCE_SCHEMA_CHANGED
+    - SOURCE_CONTROL_TOTAL_MISMATCH
+deduplication:
+  before_matching: true
+  exact_key: [source, source_record_id, source_version]
+  conflicting_duplicate_action: quarantine
 normalization:
-  version: 1
+  version: 2
+  preserve_raw_source: true
+  asset_registry_version: required
   required_fields:
     - source
     - source_record_id
+    - source_version
+    - provider_account_id
     - record_type
     - gross_atomic
     - fee_atomic
+    - reserve_atomic
     - net_atomic
-    - asset
-    - effective_at
+    - presentment_asset
+    - settlement_asset
+    - source_effective_at
+    - ingested_at
 matching:
-  version: 1
+  version: 2
+  double_sided: true
+  terminal_outcomes: [MATCHED, EXCLUDED, EXCEPTION]
   rules:
-    - id: exact-provider-record-id
+    - id: exact-provider-financial-record
       priority: 10
-      fields: [provider_balance_transaction_id, asset]
+      fields: [provider_account_id, provider_balance_transaction_id, settlement_asset]
       cardinality: one_to_one
     - id: exact-object-and-component
       priority: 20
-      fields: [provider_object_id, record_type, asset, gross_atomic]
+      fields: [provider_account_id, provider_object_id, record_type, settlement_asset]
       cardinality: one_to_many
+    - id: constrained-composite
+      priority: 90
+      fields: [provider_account_id, record_type, gross_atomic, settlement_asset]
+      bounded_time_field: source_effective_at
+      on_multiple_candidates: AMBIGUOUS_REFERENCE
+  equations:
+    - id: settlement-components
+      expression: gross_atomic - fee_atomic - reserve_atomic == net_atomic
+      grouped_by: [provider_account_id, settlement_batch_id, settlement_asset]
 exceptions:
+  preserve_history: true
   codes:
     - INCOMPLETE_SOURCE
+    - SOURCE_SCHEMA_CHANGED
     - MISSING_INTERNAL
     - MISSING_PROVIDER
     - AMOUNT_MISMATCH
     - ASSET_MISMATCH
     - FEE_MISMATCH
+    - FX_MISMATCH
     - AMBIGUOUS_REFERENCE
     - DUPLICATE_SOURCE
+    - CONFLICTING_DUPLICATE
     - LATE_ARRIVAL
+    - REPORT_VERSION_SUPERSEDED
 resolution:
-  preserve_history: true
-  require_actor_and_reason: true
+  require_actor_reason_evidence: true
+  require_approval_above_policy_threshold: true
+  adjustment_key: hash(exception_id, resolution_version)
   ledger_adjustments_use_normal_posting_flow: true
+  rerun_must_reuse_adjustment: true
 run_identity:
   fields:
     - control_id
     - scope
     - period_start
     - period_end
-    - source_checkpoints
+    - source_manifest_digests
     - normalization_version
     - matching_version

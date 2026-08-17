@@ -1,4 +1,4 @@
 interface:
   display_name: "Payment Ledger Design"
   short_description: "Design auditable, balanced payment ledgers"
-  default_prompt: "Use $design-payment-ledger to design or review an auditable payment ledger for this system."
+  default_prompt: "Use $design-payment-ledger to run the hazard pass, then design or review this ledger with explicit invariants and failure tests."

@@ -1,4 +1,4 @@
 interface:
   display_name: "Reliable Payment Webhooks"
   short_description: "Build secure, durable payment webhooks"
-  default_prompt: "Use $build-reliable-payment-webhooks to design or review this payment webhook pipeline."
+  default_prompt: "Use $build-reliable-payment-webhooks to run the hazard pass, then design or review this webhook pipeline with evidence and failure tests."

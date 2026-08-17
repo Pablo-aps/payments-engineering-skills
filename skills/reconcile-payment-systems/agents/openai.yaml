@@ -1,4 +1,4 @@
 interface:
   display_name: "Payment Reconciliation"
   short_description: "Reconcile provider, ledger, and bank records"
-  default_prompt: "Use $reconcile-payment-systems to design or review reconciliation for these payment records."
+  default_prompt: "Use $reconcile-payment-systems to run the hazard pass, then design or review this control with completeness gates and deterministic fixtures."
