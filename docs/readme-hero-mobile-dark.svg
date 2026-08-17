@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="900" viewBox="0 0 640 900" role="img" aria-labelledby="title description">
+  <title id="title">Happy-path payment review compared with payment-aware review</title>
+  <desc id="description">A mobile comparison showing that payment-aware review treats a timeout as indeterminate, deduplicates the financial effect rather than only the webhook event, and requires item-level reconciliation rather than matching totals.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="1" stop-color="#0c2635"/>
+    </linearGradient>
+    <style>
+      .eyebrow { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 1.8px; }
+      .panel-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 21px; font-weight: 700; letter-spacing: 0.7px; }
+      .label { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: 0.7px; }
+      .value { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 25px; font-weight: 700; }
+      .detail { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 17px; font-weight: 400; }
+      .footer { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 19px; font-weight: 600; }
+    </style>
+  </defs>
+
+  <rect width="640" height="900" rx="28" fill="url(#background)"/>
+  <text x="320" y="41" text-anchor="middle" class="eyebrow" fill="#94a3b8">SAME CODE. DIFFERENT QUESTIONS.</text>
+
+  <rect x="28" y="66" width="584" height="326" rx="22" fill="#111c2c" stroke="#4c2636"/>
+  <text x="52" y="100" class="panel-title" fill="#fda4af">HAPPY-PATH REVIEW</text>
+
+  <rect x="48" y="119" width="544" height="76" rx="13" fill="#211624" stroke="#4c2636"/>
+  <text x="68" y="145" class="label" fill="#fb7185">REFUND TIMEOUT</text>
+  <text x="68" y="177" class="value" fill="#f8fafc">Retry the request</text>
+
+  <rect x="48" y="207" width="544" height="76" rx="13" fill="#211624" stroke="#4c2636"/>
+  <text x="68" y="233" class="label" fill="#fb7185">DUPLICATE WEBHOOK</text>
+  <text x="68" y="265" class="value" fill="#f8fafc">Dedupe the event ID</text>
+
+  <rect x="48" y="295" width="544" height="76" rx="13" fill="#211624" stroke="#4c2636"/>
+  <text x="68" y="321" class="label" fill="#fb7185">RECONCILIATION</text>
+  <text x="68" y="353" class="value" fill="#f8fafc">Difference = 0 ✓</text>
+
+  <circle cx="320" cy="424" r="22" fill="#e2e8f0"/>
+  <path d="M320 414v20m-8-8 8 8 8-8" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="28" y="456" width="584" height="326" rx="22" fill="#111c2c" stroke="#155e63"/>
+  <text x="52" y="490" class="panel-title" fill="#5eead4">PAYMENT-AWARE REVIEW</text>
+
+  <rect x="48" y="509" width="544" height="76" rx="13" fill="#0b292c" stroke="#155e63"/>
+  <text x="68" y="535" class="label" fill="#2dd4bf">INDETERMINATE</text>
+  <text x="68" y="566" class="value" fill="#f8fafc">Recover before retrying</text>
+
+  <rect x="48" y="597" width="544" height="76" rx="13" fill="#0b292c" stroke="#155e63"/>
+  <text x="68" y="623" class="label" fill="#2dd4bf">FINANCIAL EFFECT</text>
+  <text x="68" y="654" class="value" fill="#f8fafc">Dedupe what moves money</text>
+
+  <rect x="48" y="685" width="544" height="76" rx="13" fill="#0b292c" stroke="#155e63"/>
+  <text x="68" y="711" class="label" fill="#2dd4bf">ITEM-LEVEL MATCHING</text>
+  <text x="68" y="742" class="value" fill="#f8fafc">Explain every residual</text>
+
+  <rect x="28" y="808" width="584" height="64" rx="14" fill="#e2e8f0"/>
+  <text x="320" y="836" text-anchor="middle" class="footer" fill="#0f172a">Stronger failure models.</text>
+  <text x="320" y="859" text-anchor="middle" class="detail" fill="#334155">Safer decisions. Recoverable outcomes.</text>
+</svg>

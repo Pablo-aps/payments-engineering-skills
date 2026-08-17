@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Payments Engineering Skills for Claude Code and Codex</title>
+  <desc id="description">Make coding agents review payment code like real money can be lost, with guardrails for ambiguous timeouts, financial-effect idempotency, and item-level reconciliation.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.58" stop-color="#0b1c2d"/>
+      <stop offset="1" stop-color="#0b2a34"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#020617" flood-opacity="0.5"/>
+    </filter>
+    <style>
+      .eyebrow { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 2.2px; }
+      .headline { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 52px; font-weight: 750; letter-spacing: -1.4px; }
+      .subhead { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 23px; font-weight: 450; }
+      .metric { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 16px; font-weight: 600; }
+      .card-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 1.3px; }
+      .label { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; letter-spacing: 0.7px; }
+      .value { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 22px; font-weight: 650; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <circle cx="1110" cy="70" r="330" fill="url(#glow)"/>
+  <circle cx="500" cy="690" r="350" fill="url(#glow)" opacity="0.55"/>
+
+  <g transform="translate(64 68)">
+    <rect x="0" y="0" width="42" height="6" rx="3" fill="#22d3ee"/>
+    <text x="0" y="40" class="eyebrow" fill="#67e8f9">PAYMENTS ENGINEERING SKILLS</text>
+
+    <text x="0" y="118" class="headline" fill="#f8fafc">Review payment code</text>
+    <text x="0" y="177" class="headline" fill="#f8fafc">like real money</text>
+    <text x="0" y="236" class="headline" fill="#f8fafc">can be lost.</text>
+
+    <text x="0" y="291" class="subhead" fill="#cbd5e1">Source-backed guardrails for Claude Code and Codex.</text>
+    <text x="0" y="326" class="subhead" fill="#94a3b8">Idempotency · Ledgers · Webhooks · Reconciliation · State</text>
+
+    <rect x="0" y="379" width="675" height="58" rx="15" fill="#0f2134" stroke="#28445e"/>
+    <text x="24" y="415" class="metric" fill="#e2e8f0">5 skills</text>
+    <circle cx="137" cy="408" r="3" fill="#475569"/>
+    <text x="158" y="415" class="metric" fill="#e2e8f0">50 hazards</text>
+    <circle cx="306" cy="408" r="3" fill="#475569"/>
+    <text x="327" y="415" class="metric" fill="#e2e8f0">65 evals</text>
+    <circle cx="445" cy="408" r="3" fill="#475569"/>
+    <text x="466" y="415" class="metric" fill="#e2e8f0">20 fixtures</text>
+  </g>
+
+  <g transform="translate(836 70)" filter="url(#shadow)">
+    <rect width="380" height="500" rx="26" fill="#101d2d" stroke="#285168"/>
+    <text x="28" y="45" class="card-title" fill="#94a3b8">THE FAILURE MODEL CHANGES</text>
+
+    <rect x="24" y="70" width="332" height="112" rx="17" fill="#211624" stroke="#55283a"/>
+    <text x="46" y="104" class="label" fill="#fb7185">TIMEOUT ≠ FAILURE</text>
+    <text x="46" y="140" class="value" fill="#f8fafc">Recover before retrying</text>
+    <text x="46" y="164" class="label" fill="#94a3b8">STATE: INDETERMINATE</text>
+
+    <rect x="24" y="194" width="332" height="112" rx="17" fill="#0b292c" stroke="#155e63"/>
+    <text x="46" y="228" class="label" fill="#2dd4bf">DELIVERY ≠ EFFECT</text>
+    <text x="46" y="264" class="value" fill="#f8fafc">Dedupe what moves money</text>
+    <text x="46" y="288" class="label" fill="#a7f3d0">SEMANTIC IDENTITY</text>
+
+    <rect x="24" y="318" width="332" height="112" rx="17" fill="#0b292c" stroke="#155e63"/>
+    <text x="46" y="352" class="label" fill="#2dd4bf">TOTALS ≠ PROOF</text>
+    <text x="46" y="388" class="value" fill="#f8fafc">Match every item</text>
+    <text x="46" y="412" class="label" fill="#a7f3d0">EXPLAIN EVERY RESIDUAL</text>
+
+    <rect x="24" y="452" width="332" height="4" rx="2" fill="#164e63"/>
+    <rect x="24" y="452" width="228" height="4" rx="2" fill="#22d3ee"/>
+  </g>
+
+  <text x="64" y="603" class="metric" fill="#64748b">github.com/Pablo-aps/payments-engineering-skills</text>
+</svg>
