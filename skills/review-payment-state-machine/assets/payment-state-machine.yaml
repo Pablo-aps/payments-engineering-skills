@@ -1,0 +1,54 @@
+version: 1
+entities:
+  payment_intent:
+    initial: REQUIRES_PAYMENT_METHOD
+    states:
+      - REQUIRES_PAYMENT_METHOD
+      - PROCESSING
+      - PARTIALLY_CAPTURED
+      - CAPTURED
+      - CANCELED
+      - INDETERMINATE
+    transitions:
+      - from: REQUIRES_PAYMENT_METHOD
+        command: submit_attempt
+        to: PROCESSING
+        requires: [idempotency_key, payment_attempt_id]
+      - from: PROCESSING
+        fact: capture_confirmed
+        to: CAPTURED
+        guard: captured_amount_atomic == intended_amount_atomic
+        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
+      - from: PROCESSING
+        fact: partial_capture_confirmed
+        to: PARTIALLY_CAPTURED
+        guard: 0 < captured_amount_atomic < intended_amount_atomic
+        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
+      - from: PROCESSING
+        fact: provider_outcome_unknown
+        to: INDETERMINATE
+        effects: [schedule_provider_inquiry, block_duplicate_attempt]
+      - from: INDETERMINATE
+        fact: capture_confirmed
+        to: CAPTURED
+        guard: authoritative_provider_evidence
+        effects: [post_capture_ledger_transaction, evaluate_fulfillment]
+transition_record:
+  required:
+    - entity_id
+    - prior_state
+    - next_state
+    - source_type
+    - source_id
+    - observed_at
+    - rule_version
+invalid_transition:
+  action: CREATE_RECONCILIATION_EXCEPTION
+  preserve_source_evidence: true
+fulfillment:
+  default: HOLD
+  rules_are_versioned: true
+
+# This is a reviewable contract, not a universal lifecycle. Adapt states and
+# evidence to each rail. Refunds, disputes, settlement, and fulfillment should
+# normally be related entities rather than extra values on payment_intent.

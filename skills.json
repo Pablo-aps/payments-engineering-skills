@@ -1,0 +1,30 @@
+{
+  "version": "0.1.0",
+  "skills": [
+    {
+      "name": "build-reliable-payment-webhooks",
+      "path": "skills/build-reliable-payment-webhooks",
+      "topics": ["webhooks", "signatures", "deduplication", "retries"]
+    },
+    {
+      "name": "design-payment-ledger",
+      "path": "skills/design-payment-ledger",
+      "topics": ["ledger", "double-entry", "balances", "money"]
+    },
+    {
+      "name": "implement-idempotent-payments",
+      "path": "skills/implement-idempotent-payments",
+      "topics": ["idempotency", "concurrency", "retries", "recovery"]
+    },
+    {
+      "name": "reconcile-payment-systems",
+      "path": "skills/reconcile-payment-systems",
+      "topics": ["reconciliation", "settlement", "matching", "exceptions"]
+    },
+    {
+      "name": "review-payment-state-machine",
+      "path": "skills/review-payment-state-machine",
+      "topics": ["state-machine", "authorization", "capture", "fulfillment"]
+    }
+  ]
+}

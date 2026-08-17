@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0",
+  "scenarios": [
+    {
+      "id": "concurrent-wallet-debits",
+      "skill": "design-payment-ledger",
+      "input": { "available_atomic": "1000", "debits_atomic": ["700", "600"], "concurrent": true },
+      "expected": { "posted_count": 1, "rejected_count": 1, "ending_available_atomic": "300" }
+    },
+    {
+      "id": "refund-timeout-late-success",
+      "skill": "implement-idempotent-payments",
+      "input": { "transport_result": "timeout", "later_provider_result": "succeeded", "retries": 2 },
+      "expected": { "provider_refund_count": 1, "local_terminal_state": "SUCCEEDED", "recovery_source": "provider_inquiry_or_event" }
+    },
+    {
+      "id": "duplicate-webhook-after-worker-crash",
+      "skill": "build-reliable-payment-webhooks",
+      "input": { "deliveries": 2, "crash_after_effect": true, "event_id": "evt_fixture_1" },
+      "expected": { "inbox_rows": 1, "financial_effect_count": 1, "final_state": "PROCESSED" }
+    },
+    {
+      "id": "settlement-report-missing-page",
+      "skill": "reconcile-payment-systems",
+      "input": { "expected_pages": 3, "received_pages": [1, 3], "aggregate_difference_atomic": "0" },
+      "expected": { "run_status": "INCOMPLETE", "exception_code": "INCOMPLETE_SOURCE" }
+    },
+    {
+      "id": "stale-failure-after-capture",
+      "skill": "review-payment-state-machine",
+      "input": { "current_state": "CAPTURED", "incoming_fact": "attempt_failed", "incoming_fact_is_stale": true },
+      "expected": { "next_state": "CAPTURED", "exception_created": true, "evidence_preserved": true }
+    }
+  ]
+}

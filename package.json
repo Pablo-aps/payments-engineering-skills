@@ -1,0 +1,29 @@
+{
+  "name": "payments-engineering-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-minded Agent Skills for payment ledgers, idempotency, webhooks, reconciliation, and lifecycle design.",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-skills.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pablo-aps/payments-engineering-skills.git"
+  },
+  "keywords": [
+    "agent-skills",
+    "ai-agents",
+    "payments",
+    "fintech",
+    "ledger",
+    "idempotency",
+    "webhooks",
+    "reconciliation"
+  ]
+}

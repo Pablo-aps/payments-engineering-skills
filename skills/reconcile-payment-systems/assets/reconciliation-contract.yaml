@@ -1,0 +1,62 @@
+version: 1
+control:
+  id: provider-balance-to-ledger
+  objective: Every provider balance movement is represented once and accurately in the internal ledger.
+  cadence: daily
+  timezone: UTC
+sources:
+  provider_balance:
+    identity: provider_balance_transaction_id
+    readiness: report_finalized
+    checkpoint: [report_id, page_cursor]
+    amount_unit: atomic
+  internal_ledger:
+    identity: ledger_entry_id
+    readiness: posting_window_closed
+    checkpoint: [max_posted_at, max_entry_id]
+normalization:
+  version: 1
+  required_fields:
+    - source
+    - source_record_id
+    - record_type
+    - gross_atomic
+    - fee_atomic
+    - net_atomic
+    - asset
+    - effective_at
+matching:
+  version: 1
+  rules:
+    - id: exact-provider-record-id
+      priority: 10
+      fields: [provider_balance_transaction_id, asset]
+      cardinality: one_to_one
+    - id: exact-object-and-component
+      priority: 20
+      fields: [provider_object_id, record_type, asset, gross_atomic]
+      cardinality: one_to_many
+exceptions:
+  codes:
+    - INCOMPLETE_SOURCE
+    - MISSING_INTERNAL
+    - MISSING_PROVIDER
+    - AMOUNT_MISMATCH
+    - ASSET_MISMATCH
+    - FEE_MISMATCH
+    - AMBIGUOUS_REFERENCE
+    - DUPLICATE_SOURCE
+    - LATE_ARRIVAL
+resolution:
+  preserve_history: true
+  require_actor_and_reason: true
+  ledger_adjustments_use_normal_posting_flow: true
+run_identity:
+  fields:
+    - control_id
+    - scope
+    - period_start
+    - period_end
+    - source_checkpoints
+    - normalization_version
+    - matching_version

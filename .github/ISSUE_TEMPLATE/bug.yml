@@ -1,0 +1,38 @@
+name: Incorrect or unsafe guidance
+description: Report a reproducible problem in a skill, reference, contract, or fixture.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not disclose exploitable vulnerabilities or sensitive data here. Use private vulnerability reporting instead.
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Affected area
+      options:
+        - build-reliable-payment-webhooks
+        - design-payment-ledger
+        - implement-idempotent-payments
+        - reconcile-payment-systems
+        - review-payment-state-machine
+        - repository tooling
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is inaccurate, incomplete, or unsafe?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction or counterexample
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Primary source or invariant

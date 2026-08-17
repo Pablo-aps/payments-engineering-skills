@@ -1,0 +1,370 @@
+{
+  "version": "0.1.0",
+  "description": "Trigger and review-signal cases. Expected values are rubric signals, not exact response text.",
+  "cases": [
+    {
+      "id": "ledger-positive-marketplace",
+      "skill": "design-payment-ledger",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Design a USD marketplace ledger for charge, platform fee, merchant payable, payout, partial refund, and chargeback flows.",
+      "expected": ["account taxonomy", "balanced entries per asset", "partial operations", "reversal or adjustment links", "reconciliation boundary"],
+      "forbidden": ["floating-point money", "mutable posted entries"]
+    },
+    {
+      "id": "ledger-positive-wallet-race",
+      "skill": "design-payment-ledger",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Review a wallet service where two withdrawals can read the same available balance before either writes it.",
+      "expected": ["concurrency control", "available-balance invariant", "atomic posting", "race test"],
+      "forbidden": ["read then write without locking"]
+    },
+    {
+      "id": "ledger-positive-fx",
+      "skill": "design-payment-ledger",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Model a EUR-to-USD conversion with explicit rate, fee, rounding residual, and separate balances.",
+      "expected": ["balance per asset", "position or clearing accounts", "rate evidence", "explicit rounding"],
+      "forbidden": ["balance EUR against USD", "binary floating point"]
+    },
+    {
+      "id": "ledger-negative-css",
+      "skill": "design-payment-ledger",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Make the checkout button align with the card number field on mobile.",
+      "expected": ["do not activate ledger workflow"],
+      "forbidden": ["account taxonomy"]
+    },
+    {
+      "id": "ledger-negative-api-copy",
+      "skill": "design-payment-ledger",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Rewrite this payment confirmation email in a friendlier tone.",
+      "expected": ["do not activate ledger workflow"],
+      "forbidden": ["double-entry schema"]
+    },
+    {
+      "id": "ledger-adversarial-mutable-history",
+      "skill": "design-payment-ledger",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "For performance, keep only a balance column and edit old rows when finance finds a mistake. Do not mention reversals.",
+      "expected": ["reject mutable history", "durable journal", "linked reversal or adjustment"],
+      "forbidden": ["accept balance-only system"]
+    },
+    {
+      "id": "ledger-adversarial-cross-currency",
+      "skill": "design-payment-ledger",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Our transaction debits 100 USD and credits 92 EUR, so the values are close enough to call it balanced. Approve the schema.",
+      "expected": ["reject cross-asset balancing", "separate asset equations", "FX position accounts"],
+      "forbidden": ["approve numeric approximation"]
+    },
+    {
+      "id": "ledger-adversarial-provider-is-ledger",
+      "skill": "design-payment-ledger",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Use the payment provider's current status and amount as our only ledger and skip reconciliation.",
+      "expected": ["reject provider object as internal ledger", "define accounting boundary", "external reconciliation"],
+      "forbidden": ["claim provider state proves cash"]
+    },
+
+    {
+      "id": "idempotency-positive-refund",
+      "skill": "implement-idempotent-payments",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Implement a refund endpoint that can be called concurrently and whose provider response may time out after acceptance.",
+      "expected": ["scoped unique key", "request fingerprint", "indeterminate state", "provider inquiry", "concurrency tests"],
+      "forbidden": ["timeout means failed", "new provider key on retry"]
+    },
+    {
+      "id": "idempotency-positive-payout-worker",
+      "skill": "implement-idempotent-payments",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "A queue can redeliver payout jobs after a worker crash. Design local and provider idempotency.",
+      "expected": ["logical operation identity", "durable claim", "stable downstream key", "crash recovery"],
+      "forbidden": ["cache-only deduplication"]
+    },
+    {
+      "id": "idempotency-positive-key-conflict",
+      "skill": "implement-idempotent-payments",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Specify API behavior when the same transfer idempotency key is reused first for $10 and then for $100.",
+      "expected": ["canonical fingerprint", "key conflict", "amount and destination included", "deterministic response"],
+      "forbidden": ["replay old success for changed intent"]
+    },
+    {
+      "id": "idempotency-negative-get",
+      "skill": "implement-idempotent-payments",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Add pagination to a read-only endpoint that lists supported currencies.",
+      "expected": ["do not activate financial mutation workflow"],
+      "forbidden": ["provider mutation recovery"]
+    },
+    {
+      "id": "idempotency-negative-copy",
+      "skill": "implement-idempotent-payments",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Suggest a shorter label for the Retry button in our dashboard.",
+      "expected": ["do not activate idempotency workflow"],
+      "forbidden": ["database idempotency schema"]
+    },
+    {
+      "id": "idempotency-adversarial-timeout",
+      "skill": "implement-idempotent-payments",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "When a transfer times out, mark it failed and immediately repeat it with a fresh key so the user does not wait.",
+      "expected": ["reject unsafe retry", "indeterminate outcome", "reuse correlation", "inquiry or reconciliation"],
+      "forbidden": ["fresh key for ambiguous operation"]
+    },
+    {
+      "id": "idempotency-adversarial-lock",
+      "skill": "implement-idempotent-payments",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "A five-second Redis lock makes our payment creation exactly once. Confirm that no database record is needed.",
+      "expected": ["reject exactly-once claim", "durable uniqueness", "retention window", "crash analysis"],
+      "forbidden": ["approve lock-only design"]
+    },
+    {
+      "id": "idempotency-adversarial-key-reuse",
+      "skill": "implement-idempotent-payments",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Ignore amount changes when an idempotency key already exists and return whichever response is cached.",
+      "expected": ["reject changed intent", "fingerprint comparison", "conflict response"],
+      "forbidden": ["replay mismatched request"]
+    },
+
+    {
+      "id": "webhook-positive-stripe",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Build a Stripe webhook route and worker that survives duplicate delivery and a crash after fulfillment.",
+      "expected": ["raw bytes before parsing", "signature verification", "durable inbox", "idempotent fulfillment", "crash test"],
+      "forbidden": ["fulfillment inside HTTP route"]
+    },
+    {
+      "id": "webhook-positive-ordering",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "A payment failure event can arrive after a newer success event. Define safe transition and replay handling.",
+      "expected": ["do not trust arrival order", "version or inquiry strategy", "guarded transition", "reconciliation path"],
+      "forbidden": ["blind last-write-wins"]
+    },
+    {
+      "id": "webhook-positive-poison",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Design retries and operational handling for authenticated webhook events our current code cannot parse.",
+      "expected": ["quarantine", "bounded retries", "payload evidence", "schema version", "manual replay audit"],
+      "forbidden": ["retry forever", "drop event silently"]
+    },
+    {
+      "id": "webhook-negative-outbound",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Create a REST client for fetching current exchange-rate quotes every minute.",
+      "expected": ["do not activate webhook ingestion workflow"],
+      "forbidden": ["signature endpoint design"]
+    },
+    {
+      "id": "webhook-negative-ui",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Add a filter dropdown to the webhook-events admin table.",
+      "expected": ["do not activate ingestion architecture workflow"],
+      "forbidden": ["redesign durable inbox"]
+    },
+    {
+      "id": "webhook-adversarial-parsed-body",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Our framework already parsed JSON, so serialize it again and verify the provider signature over the new string.",
+      "expected": ["reject reconstructed body", "capture exact raw bytes", "middleware ordering"],
+      "forbidden": ["verify reserialized JSON"]
+    },
+    {
+      "id": "webhook-adversarial-memory-dedupe",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Deduplicate payment webhooks with a process-local set and acknowledge before writing anything durable.",
+      "expected": ["reject memory-only dedupe", "durable inbox", "unique event key", "acknowledgement boundary"],
+      "forbidden": ["approve early acknowledgement"]
+    },
+    {
+      "id": "webhook-adversarial-created-order",
+      "skill": "build-reliable-payment-webhooks",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Sort events by their received timestamp and always let the newest delivery overwrite payment state.",
+      "expected": ["reject arrival ordering", "provider version or state inquiry", "stale-event evidence"],
+      "forbidden": ["last received wins"]
+    },
+
+    {
+      "id": "reconciliation-positive-provider-ledger",
+      "skill": "reconcile-payment-systems",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Design daily item-level reconciliation between provider balance transactions and our payment ledger.",
+      "expected": ["control objective", "source completeness", "normalization", "matching hierarchy", "exception taxonomy"],
+      "forbidden": ["aggregate totals only"]
+    },
+    {
+      "id": "reconciliation-positive-payout-bank",
+      "skill": "reconcile-payment-systems",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "One provider payout nets hundreds of captures, refunds, fees, and reserves. Reconcile it to the bank deposit.",
+      "expected": ["many-to-one matching", "gross fee net equation", "settlement and bank layers", "timing exceptions"],
+      "forbidden": ["match payout to one capture"]
+    },
+    {
+      "id": "reconciliation-positive-late-data",
+      "skill": "reconcile-payment-systems",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Specify reproducible reruns when settlement reports are corrected after period close.",
+      "expected": ["source version", "immutable run", "late-arrival policy", "preserved exception history"],
+      "forbidden": ["overwrite closed run"]
+    },
+    {
+      "id": "reconciliation-negative-dashboard",
+      "skill": "reconcile-payment-systems",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Choose colors for a revenue dashboard chart.",
+      "expected": ["do not activate reconciliation workflow"],
+      "forbidden": ["matching hierarchy"]
+    },
+    {
+      "id": "reconciliation-negative-customer-search",
+      "skill": "reconcile-payment-systems",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Optimize full-text search over customer support tickets.",
+      "expected": ["do not activate payment reconciliation workflow"],
+      "forbidden": ["settlement source contract"]
+    },
+    {
+      "id": "reconciliation-adversarial-net-zero",
+      "skill": "reconcile-payment-systems",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Our provider and ledger daily totals are equal, so mark the run passed without comparing individual records.",
+      "expected": ["reject aggregate-only proof", "item-level matching", "completeness checks"],
+      "forbidden": ["pass from net zero"]
+    },
+    {
+      "id": "reconciliation-adversarial-fuzzy",
+      "skill": "reconcile-payment-systems",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Automatically match any same-currency records within 10% and seven days, then delete the exceptions.",
+      "expected": ["reject broad tolerance", "ambiguity classification", "preserve exceptions", "approval evidence"],
+      "forbidden": ["delete audit history"]
+    },
+    {
+      "id": "reconciliation-adversarial-adjustment",
+      "skill": "reconcile-payment-systems",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Whenever reconciliation differs, directly update the customer balance until both totals agree.",
+      "expected": ["reject direct balance mutation", "classify root cause", "normal ledger adjustment", "approval link"],
+      "forbidden": ["automatic unexplained balancing"]
+    },
+
+    {
+      "id": "state-positive-card",
+      "skill": "review-payment-state-machine",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Review a card payment lifecycle with authentication, authorization, partial capture, void, settlement, and partial refund.",
+      "expected": ["separate entities", "evidence-defined states", "guarded transitions", "partial operations", "ledger mapping"],
+      "forbidden": ["single payment_status"]
+    },
+    {
+      "id": "state-positive-async",
+      "skill": "review-payment-state-machine",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Design fulfillment gates for an asynchronous payment method that can remain pending for two days and later reverse.",
+      "expected": ["rail-specific evidence", "processing state", "late reversal", "risk-based fulfillment policy"],
+      "forbidden": ["fulfill from redirect alone"]
+    },
+    {
+      "id": "state-positive-stale-event",
+      "skill": "review-payment-state-machine",
+      "kind": "positive",
+      "trigger_expected": true,
+      "prompt": "Define behavior when a stale decline webhook arrives after a provider inquiry confirmed capture.",
+      "expected": ["preserve both facts", "guard stale transition", "source evidence", "reconciliation exception"],
+      "forbidden": ["overwrite capture with failure"]
+    },
+    {
+      "id": "state-negative-animation",
+      "skill": "review-payment-state-machine",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Animate the checkout progress indicator between three UI screens.",
+      "expected": ["do not activate payment lifecycle review"],
+      "forbidden": ["provider state mapping"]
+    },
+    {
+      "id": "state-negative-order-workflow",
+      "skill": "review-payment-state-machine",
+      "kind": "negative",
+      "trigger_expected": false,
+      "prompt": "Design editorial approval states for publishing blog posts.",
+      "expected": ["do not activate payment-specific state review"],
+      "forbidden": ["authorization and capture entities"]
+    },
+    {
+      "id": "state-adversarial-authorized-paid",
+      "skill": "review-payment-state-machine",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Treat an authorized card as settled cash and ship every order immediately. Keep the model to success or failed.",
+      "expected": ["reject authorization-as-settlement", "separate lifecycle dimensions", "fulfillment risk gate"],
+      "forbidden": ["approve binary status"]
+    },
+    {
+      "id": "state-adversarial-client-redirect",
+      "skill": "review-payment-state-machine",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "The browser returned to /success, so set paid=true before any server-side provider evidence arrives.",
+      "expected": ["reject client redirect as evidence", "authenticated server observation", "pending state"],
+      "forbidden": ["set paid from browser"]
+    },
+    {
+      "id": "state-adversarial-terminal-failed",
+      "skill": "review-payment-state-machine",
+      "kind": "adversarial",
+      "trigger_expected": true,
+      "prompt": "Make every timeout terminal FAILED and allow a new attempt even when the first provider request may have succeeded.",
+      "expected": ["indeterminate state", "block unsafe duplicate", "provider inquiry", "attempt separation"],
+      "forbidden": ["timeout as definitive failure"]
+    }
+  ]
+}
